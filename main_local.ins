@@ -1,0 +1,741 @@
+!///////////////////////////////////////////////////////////////////////////////
+!//
+!// European simulations for ForestPaths Forest Management actions
+!// - LC from Moreno/Pucher forest age data
+!// - LC forest composition data from Wanda (Vito), from around 2020.
+!// - other landuse from Hilda+
+!// - Management baseline from Suvanto- Probabilitic harvest data.
+!//  Run protocol:
+!// https://docs.google.com/document/d/1L0u5M5tGZ5JigZbHcEwjmav4roWxC4-BOq3jkHbeS2I/edit?tab=t.0
+!///////////////////////////////////////////////////////////////////////////////
+
+
+
+
+!///////////////////////////////////////////////////////////////////////////////
+!// BASELINE run instruction settings - quick breakdown:
+! start: 650, to enable 1200 years of spinup going up to 1850 (nyear_spinup 1200)
+! historic: 1850 - 2014
+! "future": 2015 - 2100
+! inputs:
+! Forest landcover includes composition data at genera-level,
+!  which are defined standtypes below.
+! Crop landcover stand types were mapped to lucrop data, and the name of the Crops
+! change in the input files themselves lucrop_*
+! [TODO] what about Pasture? not sure I have such a stand type active!?
+! landuse change is constant between 1800 and 1850, then changes to reflect
+! forest age at 2010, and changes more strongly based on Hilda+ , starting in 1900.
+! landuse change is constant again from 2020 onwards.
+
+
+
+! Probabilistic harvest matrix (excluding clearcuts) are used to emulate forestry
+! starting in 1850.
+! Clearcut harvests are added from 2011.
+! historic disturbances in all forest and landcover types are emulated first
+! with the landuse change and forest age map, then with satelite data (from 2011 to 2023)
+! Clearcut disturbance input is turned off, and CC_probabilistic harvest
+! instead takes over that function and starts from 2011.
+! [TODO] not sure that was a good decision.
+! Therefore, during the historic timeseries, no disturbance should be activated.
+
+! The cease_management scenario is expressed by activating a harvest module that
+! has no cutting actions. I decided to do it this way so that we still get all output files
+! looking the same as the other runs, for comparison.
+!
+! Prognostic disturbances such as fire, wind, barkbeetle, ([TODO] random disturbances?)
+! are re-activated from 2024
+! [DONE] what about wind, fire, barkbeetle into the future? Fire is set up.
+! Wind severity input provided by Fredrik, turned on from 2024 in the disturbance on case.
+! Wind and barkbeetle turned on from 2024
+! [TODO] what is carbon loss by barkbeetle output?
+! [TODO] why is closs_fire always 0?
+
+! turn slow harvest pools off (pers comm. Tom)
+
+! I use the option cutfirstyear 0
+! to smoothly clone forest between management types in 2025, but keeping the forest as is.
+
+! [TODO] should this be fixed in 2024? Does it matter?
+! We fix nitrogen input from 2023 by setting fixed_ndep_year 2023 and fixed_ndep 2
+! fixed_ndep_year 2023, set in variable_part, with the rest of the nitrogen variables, simply for
+! completeness. other ndep variables are spcenario-specific, so the value set in 2023
+! Is expected to differ between ssp126 and ssp1370
+!///////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+import "../../european_applications_ForestPaths/data/ins/europe.ins"
+!import "../european_applications/data/ins/landcover.ins"! Imported in crop_n.ins Jan 2025 AHES
+
+!Climate data and co2
+
+!import "cfinput_crujra_daily_v2.4.5d_redimen.ins"
+
+searchradius 1
+
+param "file_gridlist" (str "gridlist.txt")
+
+!//////////////////////////////////////////////////////////////////////////////
+!////  Crops and their settings.    ////////////////////////////////////////
+!//////////////////////////////////////////////////////////////////////////////
+
+import "../../european_applications_ForestPaths/data/ins/crop_n.ins"
+
+!//////////////////////////////////////////////////////////////////////////////
+!///// SCENARIO _SPEFICIC SETTINGS LOADED HERE:
+!//////////////////////////////////////////////////////////////////////////////
+!import "variable_part.ins"
+
+!param "retention_tree_fraction" (num 0.00)  ! if retention tree fration > 0.0, then this feature is turned on. 5% retentiontrees, in LPJG used as 5% of total mass will remain.
+!//////////////////////////////////////////////////////////////////////////////
+!////    LANDCOVER INPUT FILES    ////////////////////////////////////////
+!//////////////////////////////////////////////////////////////////////////////
+param "file_lu"              (str "/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/landuse_change_forest_age/lu_inputfiles_noNF3/net_lu_HildaPucherMircaEurope.txt")
+param "file_grossSTC"        (str "/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/landuse_change_forest_age/lu_inputfiles_noNF3/grossSTC_HildaPucherMircaEurope.txt")
+param "file_luforest"        (str "/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/landuse_change_forest_age/lu_inputfiles_noNF3/luforest_HildaPucherMircaEurope.txt")
+param "file_lucrop"          (str "/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/landuse_change_forest_age/lu_inputfiles_noNF3/lucrop_HildaPucherMircaEurope.txt")
+
+input_precision_force 11 ! testing
+distinterval 1000 ! Martin W: "I made the land use input files for a natural disturbance return interval of 1000 years" , communicated on mattermost
+
+!harvest-specific files, that are here in the main ins for transparency
+!AHES JAN 2025:
+! changed header names in these files to match with crop stand types
+param "file_Nfert" (str "")
+param "file_NfertMan" (str "")
+!//////////////////////////////////////////////////////////////////////////////
+
+
+
+
+!///////////////////////////////////////////////////////////////////////////////
+!!! Stochastic wood harvest input:
+!!! harvest_system "probability_input" in st/mt
+
+param "file_woodharv_prob_BL" (str "/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/p_harvest_Broadleaf.txt_luc_coords_added")
+param "file_woodharv_prob_NL" (str "/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/p_harvest_Conifer.txt_luc_coords_added")
+param "file_CC_prob_BL" (str "/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/p_clearcut_Broadleaf.txt_luc_coords_added")
+param "file_CC_prob_NL" (str "/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/p_clearcut_Conifer.txt_luc_coords_added")
+param "file_woodharv_intens_mean_BL" (str "/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/intensity_mean_Broadleaf.txt_luc_coords_added")
+param "file_woodharv_intens_mean_NL" (str "/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/intensity_mean_Conifer.txt_luc_coords_added")
+param "file_woodharv_intens_sd_BL" (str "/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/intensity_sd_Broadleaf.txt_luc_coords_added")
+param "file_woodharv_intens_sd_NL" (str "/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/intensity_sd_Conifer.txt_luc_coords_added")
+param "file_woodharv_size_preference_BL" (str "/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/size_target_Broadleaf.txt_luc_coords_added")
+param "file_woodharv_size_preference_NL" (str "/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/size_target_Conifer.txt_luc_coords_added")
+
+clearcutprob_off 0 ! AHES Jan 2025: Use this with "1" when having file_dist_clearcut as input and not wanting to use prob_harv_CC; or: set to 0 and set firstclearcut year, as done below.
+!firstclearcutyear 2024 ! AHES Jan 2024 get probharvest cc to start first then
+clearcutprob_input_firstyear 2011
+clearcutprob_input_lastyear 2101
+
+
+nBA_bins 19
+BA_bin_size 5
+BA_bin_min 0
+ndiam_bins 18
+diam_bin_size 5
+diam_bin_min 0
+iflast_bin_inclusive 1
+
+ifthin_prob_distribution 1
+ifslowharvestpool 0                     ! If a slow harvested product pool is included in patchpft.
+
+
+!///////////////////////////////////////////////////////////////////////////////
+
+
+!///////////////////////////////////////////////////////////////////////////////
+! Prescribed disturbance input:
+! always active if input files are there:
+param "file_dist_clearcut"           (str "")!AHES Jan 2025 turned clearcut input off, and using probabilistic harvest instead.
+param "file_dist_fire"                  (str "/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/disturbance/disturbancenew/disturbance_0.5deg_fire_use.txt")
+param "file_dist_wind"               (str "/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/disturbance/disturbancenew/disturbance_0.5deg_wind_use.txt")
+param "file_dist_barkbeetle"           (str "/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/disturbance/disturbancenew/disturbance_0.5deg_barkbeetle_use.txt")
+
+![Q] does it suppress prognostic disturbances such as "fire" during this period?
+disturbance_input_firstyear 2011 !!1985 ! acts for all disturbances together
+disturbance_input_lastyear 2023
+![Q] does it then reactivate prognostic disturbances after this year?
+!///////////////////////////////////////////////////////////////////////////////
+
+!///////////////////////////////////////////////////////////////////////////////
+!!! Stand initialisation input:
+!!! file_treeinit_st "...txt" in st/mt
+
+forest_init_poolsoil 1 ![Q] maye only relevant to stand-initialisation, so set to 0?
+
+!///////////////////////////////////////////////////////////////////////////////
+
+
+
+!//////////////////////////////////////////////////////////////////////////////
+!/////////////      INS FILE BITS FOR SIMFIRE
+!//////////////////////////////////////////////////////////////////////////////
+! from Martin Wittenbrink, pasted by AHES Jan 2025
+
+
+firemodel "BLAZE"		! BLAZE, GLOBFIRM, NOFIRE
+!the below is now in in variable_part.ins:
+!param "file_popdens"    (str "/scratch/data/isimip3/pop/lpjg-popd/population-density_3b_2015soc_30arcmin_annual_1601_2100.lpjg.nc")
+!param "variable_popdens" (str "popd")
+
+
+!fire output files:
+file_aburned_area_out "aburned_area.out"
+file_mburned_area_out "mburned_area.out"
+file_simfireanalysis_out "simfireanalysis.out"
+
+! SIMFIRE-BLAZE related files
+param "file_simfire"  (str "/Users/annemarie/Documents/1_TreeMort/2_Analysis/1_Inputs/fire/SimfireInput.bin")
+
+!///////////////////////////////////////////////////////////////////////////////////////
+! WILDFIRE STORM AND BARK-BEETLE SETTINGS
+!///////////////////////////////////////////////////////////////////////////////////////
+! provided by Fredrik Lagergren
+
+!param "file_presc_burned_area" (str "")
+
+!AHES parameter not in european_applications. Managed differently
+!fire_on_managed_forest_from 9999    ! Year from which on the fire
+                              ! model can run on managed
+                              ! forest
+use_presc_ba 0          ! use prescribed burned area to
+                        ! calibrate/evaluate BLAZE
+!presc_ba_start 2100     ! start year for prescribed BA
+!presc_ba_end 2101 ! end year for prescribed BA
+
+!storm_mortality 0
+!AHES Jan 2025:
+!AHES Jan 2025: disabled feature that insect outbreak and storms would occur in  managed stands only. Now these
+! disturbances occur in all type of stands.
+!storm_mortality_managed_from 2024   ! Year from which storm mortality is turned on in managed stands
+!insect_mortality 0
+!insect_mortality_managed_from 2024  ! Year from which insect mortality is turned on in managed stands
+
+!param "file_windload" (str "/home/anne1212/snic2022-6-59/annemarie/ForestPaths/input/future_disturbances/windloadfromWDP/windload_random2014_2100.txt")
+!param "file_dist_wind_prob" (str "")
+
+!///////////////////////////////////////////////////////////////////////////////
+! Output files
+!///////////////////////////////////////////////////////////////////////////////
+
+!prioritised variables can be derived from the following output:
+
+!Runoff
+file_runoff "tot_runoff.out"
+file_runoff_sts "runoff_sts.out"
+file_mwcont_upper "mwcont_upper.out"
+file_mwcont_lower "mwcont_lower.out"
+
+!Deadwood
+file_clitter_course_sts "clitter_course_sts.out"
+file_clitter_fine_sts "clitter_fine_sts.out"
+
+!number of Veteran trees
+file_diam_dens "diam_dens.out"
+file_dens_sts "dens_sts.out"
+file_dens_plus10cm_sts "dens_plus10cm_sts.out"
+
+!Stand biomass (Total, including ground vegetation)
+
+!Stand biomass (Aboveground - trees)
+file_diam_cmass_wood "diam_cmass_wood.out"
+file_diamstruct_cmass_wood_forest "diamstruct_cmass_wood_forest.out"
+
+!Stand biomass (Belowground - trees)
+file_diam_cmass_wood "diam_cmass_wood.out"
+file_diamstruct_cmass_wood_forest "diamstruct_cmass_wood_forest.out"
+
+
+!Soil Carbon
+file_csoil_sts "csoil_sts.out"
+
+!evapotranspiration
+file_transpiration_sts "transpiration_sts.out"
+file_intercep_sts "intercep_sts.out"
+file_evap_sts "evap_sts.out"
+file_seasonality "seasonality.out"
+
+!NPP
+file_anpp_forest "file_anpp_forest.out"
+file_anpp_natural "file_anpp_natural.out"
+
+file_storm "storm.out"
+
+file_agpp_sts "agpp_sts.out"
+file_nsoil_sts "nsoil_sts.out"
+
+file_rh_sts "rh_sts.out"
+file_rh_clitter_course_sts "rh_clitter_course_sts.out"
+file_rh_clitter_fine_sts "rh_clitter_fine_sts.out"
+file_luc_cflux_sts "luc_cflux_sts.out"
+file_nlitter_sts "nlitter_sts.out"
+file_nlitter_course_sts "nlitter_course_sts.out"
+file_nlitter_fine_sts "nlitter_fine_sts.out"
+
+
+
+file_diamstruct_cmass_leaf_natural "diamstruct_cmass_leaf_natural.out"
+file_diamstruct_cmass_leaf_forest "diamstruct_cmass_leaf_forest.out"
+file_diamstruct_cmass_wood_natural "diamstruct_cmass_wood_natural.out"
+
+file_diamstruct_cmass_froot_natural "diamstruct_cmass_froot_natural.out"
+file_diamstruct_cmass_froot_forest "diamstruct_cmass_froot_forest.out"
+file_diamstruct_cmass_wood_inc_natural "diamstruct_cmass_wood_inc_natural.out"
+file_diamstruct_cmass_wood_inc_forest "diamstruct_cmass_wood_inc_forest.out"
+
+file_diamstruct_ba_natural "diamstruct_ba_natural.out"
+file_diamstruct_ba_forest "diamstruct_ba_forest.out"
+
+file_agestruct_standage_natural "agestruct_standage_natural.out"
+file_agestruct_standage_forest "agestruct_standage_forest.out"
+file_agestruct_standage_cropland "agestruct_standage_cropland.out"
+file_agestruct_standage_pasture "agestruct_standage_pasture.out"
+
+file_anpp_sts "anpp_sts.out"
+file_lai_sts "lai_sts.out"
+file_cmass_sts "cmass_sts.out"
+file_cmass_harv_killed_sts "cmass_harv_killed_sts.out"
+file_cmass_dist_default_sts "cmass_dist_default_sts.out"
+file_cmass_dist_prescribed_sts "cmass_dist_prescribed_sts.out"
+file_cmass_dist_clearcut_killed_sts "cmass_dist_clearcut_killed_sts.out"
+file_cmass_dist_fire_killed_sts "cmass_dist_fire_killed_sts.out"
+file_cmass_dist_wind_killed_sts "cmass_dist_wind_killed_sts.out"
+file_cmass_dist_barkbeetle_killed_sts "cmass_dist_barkbeetle_killed_sts.out"
+file_cmass_dist_fire_killed_plus10cm_sts "cmass_dist_fire_killed_plus10cm_sts.out"
+file_cmass_dist_wind_killed_plus10cm_sts "cmass_dist_wind_killed_plus10cm_sts.out"
+file_cmass_dist_barkbeetle_killed_plus10cm_sts "cmass_dist_barkbeetle_killed_plus10cm_sts.out"
+
+file_lai_tree_sts "lai_tree_sts.out"
+file_cmass_tree_sts "cmass_tree_sts.out"
+file_cmass_tree_mort_sts "cmass_tree_mort_sts.out"
+
+file_cmass_wood_sts "cmass_wood_sts.out"
+file_cmass_wood_harv_killed_sts "cmass_wood_harv_killed_sts.out"
+file_cmass_wood_harv_sts "cmass_wood_harv_sts.out"
+file_cmass_wood_harv_toprod_sts "cmass_wood_harv_toprod_sts.out"
+file_cmass_wood_thin_sts "cmass_wood_thin_sts.out"
+file_cmass_wood_clearcut_sts "cmass_wood_clearcut_sts.out"
+file_cmass_wood_mort_sts "cmass_wood_mort_sts.out"
+file_cmass_wood_inc_sts "cmass_wood_inc_sts.out"
+
+
+file_clitter_sts "clitter_sts.out"
+file_csink_sts "csink_sts.out"
+
+file_dens_sts "dens_sts.out"
+file_height_sts "height_sts.out"
+file_diam_sts "diam_sts.out"
+file_diam_g_sts "diam_g_sts.out"
+
+file_cmass_plus10cm_sts "cmass_plus10cm_sts.out"
+file_cmass_harv_killed_plus10cm_sts "cmass_harv_killed_plus10cm_sts.out"
+
+file_cmass_wood_plus10cm_sts "cmass_wood_plus10cm_sts.out"
+file_cmass_wood_harv_killed_plus10cm_sts "cmass_wood_harv_killed_plus10cm_sts.out"
+file_cmass_wood_mort_plus10cm_sts "cmass_wood_mort_plus10cm_sts.out"
+file_cmass_wood_inc_plus10cm_sts "cmass_wood_inc_plus10cm_sts.out"
+
+
+file_height_plus10cm_sts "height_plus10cm_sts.out"
+file_diam_plus10cm_sts "diam_plus10cm_sts.out"
+file_diam_g_plus10cm_sts "diam_g_plus10cm_sts.out"
+
+file_height_sts_patch_mean "height_sts_patch_mean.out"
+file_diam_sts_patch_mean "diam_sts_patch_mean.out"
+file_diam_g_sts_patch_mean "diam_g_sts_patch_mean.out"
+
+file_height_plus10cm_sts_patch_mean "height_plus10cm_sts_patch_mean.out"
+file_diam_plus10cm_sts_patch_mean "diam_plus10cm_sts_patch_mean.out"
+file_diam_g_plus10cm_sts_patch_mean "diam_g_plus10cm_sts_patch_mean.out"
+
+file_cutinterval_sts "cutinterval_sts.out"
+file_cutinterval_thisyear_sts "cutinterval_thisyear_sts.out"
+file_nstand_sts "nstands_sts.out"
+!!
+
+file_stemloss "stemloss.out"
+file_crownloss "crownloss.out"
+file_closs "closs.out"
+file_stemloss_greff "stemloss_greff.out"
+file_crownloss_greff "crownloss_greff.out"
+file_closs_greff "closs_greff.out"
+file_stemloss_thin "stemloss_thin.out"
+file_crownloss_thin "crownloss_thin.out"
+file_closs_thin "closs_thin.out"
+file_stemloss_age "stemloss_age.out"
+file_crownloss_age "crownloss_age.out"
+file_closs_age "closs_age.out"
+file_stemloss_dist "stemloss_dist.out"
+file_crownloss_dist "crownloss_dist.out"
+file_closs_dist "closs_dist.out"
+file_stemloss_fire "stemloss_fire.out"
+file_crownloss_fire "crownloss_fire.out"
+file_closs_fire "closs_fire.out"
+file_stemloss_harv_thin "stemloss_harv_thin.out"
+file_crownloss_harv_thin "crownloss_harv_thin.out"
+file_closs_harv_thin "closs_harv_thin.out"
+file_stemloss_harv_ccut "stemloss_harv_ccut.out"
+file_crownloss_harv_ccut "crownloss_harv_ccut.out"
+file_closs_harv_ccut "closs_harv_ccut.out"
+file_stemloss_harv_luc "stemloss_harv_luc.out"
+file_crownloss_harv_luc "crownloss_harv_luc.out"
+file_closs_harv_luc "closs_harv_luc.out"
+file_stemloss_other "stemloss_other.out"
+file_crownloss_other "crownloss_other.out"
+file_closs_other "closs_other.out"
+file_diam_crownarea "diam_crownarea.out"
+
+
+!file_cmass_plus10cm "cmass_plus10cm.out"
+!file_forest_cmass_harv_killed_plus10cm "forest_cmass_harv_killed_plus10cm.out"
+file_speciesheights_plus10cm "height_plus10cm.out"
+file_speciesdiam_plus10cm "diam_plus10cm.out"
+
+file_diamstruct_natural "diamstruct_natural.out"
+file_diamstruct_forest "diamstruct_forest.out"
+file_diamstruct_cmass_natural "diamstruct_cmass_natural.out"
+file_diamstruct_cmass_forest "diamstruct_cmass_forest.out"
+file_agestruct_natural "agestruct_natural.out"
+file_agestruct_forest "agestruct_forest.out"
+
+file_cmass_natural "cmass_natural.out"
+file_cmass_forest "cmass_forest.out"
+
+file_cmass_landscape "cmass_landscape.out"
+!file_cmass_landscape_forest "cmass_landscape_forest.out"
+!file_cmass_landscape_natural "cmass_landscape_natural.out"
+!file_anpp_landscape "anpp_landscape.out"
+!file_anpp_landscape_forest "anpp_landscape_forest.out"
+file_dens_forest "dens_forest.out"
+file_dens_natural "dens_natural.out"
+
+file_speciesheights "height.out"
+file_speciesheights_forest "height_forest.out"
+file_speciesheights_natural "height_natural.out"
+file_speciesdiam "diam.out"
+file_speciesdiam_natural "diam_natural.out"
+file_speciesdiam_forest "diam_forest.out"
+
+file_forest_vegc "forest_vegc.out"
+file_forest_cflux_veg "forest_cflux_veg.out"
+file_forest_harvest "forest_harvest.out"
+!file_forest_cmass_harv_killed "forest_cmass_harv_killed.out"
+
+file_cpool_forest "cpool_forest.out"
+file_cpool_natural "cpool_natural.out"
+file_cflux_forest "cflux_forest.out"
+file_cflux_natural "cflux_natural.out"
+
+printseparatestands 0
+
+print_cmass_stand 1
+print_dens_stand 0
+print_diamstruct_stand 0
+print_diamstruct_cmass_stand 0
+print_diam_stand 0
+
+print_anpp_stand 0
+print_agestruct_stand 0
+
+printstandtypes 1
+print_cmass_pft_st 1
+print_diamstruct_cmass_st 1
+
+print_cmass_harv_killed_pft_st 1
+print_transpiration_pft_st 1
+print_diamstruct_cmass_leaf_st 1
+print_diamstruct_cmass_wood_st 1
+print_diamstruct_cmass_froot_st 1
+print_diamstruct_cmass_wood_inc_st 1
+
+print_standagestruct_st 1
+
+
+!///////////////////////////////////////////////////////////////////////////////
+! Run parameters and options
+!///////////////////////////////////////////////////////////////////////////////
+
+nyear_spinup 1200 ! multiple of 30 years
+
+!npatch 25			! number of replicate patches to simulate
+npatch 1
+npatch_secondarystand 1
+!npatch_secondarystand 10				!! Simulation 9a
+
+ifnewalloc 1			! Whether to use the new allocation calculations (1), or the original (0)
+ifvolhght 1			! Whether to use the new tree volume to height calculations (1), or the original (0)
+ifprintallommort 0 		! Whether to print which mortality function was triggered (1) or not (0)
+!file_veg_struct "veg_struct.out"
+
+
+searchradius_soil 2
+
+!coordinates_precision 3			!! Needed for site simulations
+
+iftransfer_to_new_stand 1
+transfer_level 2 ! AHES FEB 2025: changed to 2, because we have gross STC as input.
+
+run_landcover 1
+
+run_urban 1                ! Whether to simulate barren land (1) or not (0)
+run_crop 1                 ! Whether to simulate crop vegetation (1) or not (0)
+run_forest 1               ! Whether to simulate managed forest (1) or not (0)
+run_pasture 1              ! Whether to simulate pasture (1) or not (0)
+run_natural 1              ! Whether to simulate natural vegetation (1) or not (0)
+run_peatland 0             ! Whether to simulate peatland (1) or not (0)
+run_barren 1               ! Whether to simulate barren land (1) or not (0)
+
+pft "Ulm_gla" (
+	include 0
+)
+
+pft "Lar_dec" (
+	include 1
+)
+
+!///////////////////////////////////////////////////////////////////////////////
+! Management types
+!///////////////////////////////////////////////////////////////////////////////
+
+
+!AHES Jan 2025
+! settings related to setting management and disturbances pre 2010
+group "gr_mt_man" (
+    suppress_fire 1
+    !mt_fire  ! management type sets suppress_fire 0 in variable_parts, updated to 1 in variable_part for sfire. AHES
+    relaxed_establishment 1
+    stochmort 1         !!
+    stochestab 1                        !! US
+    killgrass_at_cc 1           !! US           !!!!
+    reestab "restricted"  ! "all" or "restricted" ! AHES only allow the specified species to turn up.
+    planting_system "SELECTION"
+    suppress_disturbance 1
+    firstmanageyear 1801		! Must be set if management starts before first historic year (first climate year in trunk code version)
+    suppress_fire_firstyear 1850        ! [Q] AHES Jan 2025 some redundancy now?
+    suppress_fire_lastyear 2010
+    suppress_disturbance_firstyear 1850
+    suppress_disturbance_lastyear  2010  ! [TODO] check how these interact- can I have all dist off, but fire on?
+    firstclearcutyear 2011  ! AHES Jan 2025: keep active to suppress CC prob_harvest
+    harvest_system "probability_input"	![Q] acts from 1900 onwards, so probabilistic harvest ( without CC prob_harvest) acts in history, and CC prob_harvest joins in 2011.! Sim. 4,5 & 8,9
+)
+
+! only used for cease_man scenario. in all others mt_ceaseman contains gr_mt_man
+group "gr_mt_ceaseman" (
+  suppress_fire 0
+  relaxed_establishment 1
+  stochmort  1
+  stochestab 1
+  reestab "all"  ! "all" or "restricted" ! AHES allow all specified species to turn up in this case.
+  suppress_disturbance 0
+  harvest_system ""       ! does this mean no harvest?
+  planting_system ""      ! does this mean naturalveg establishes?
+  !naturalveg "all"       ! just to be sure - doesn't work anyways.
+  cutfirstyear 0          ! suppress clearcut, let the forest transition gradually. the disturbance frequency should probably increase again at this stage.
+)
+
+!//////////////////////////////////////////////////////////////////////////////
+!///// SCENARIO _SPEFICIC SETTINGS LOADED HERE:
+!//////////////////////////////////////////////////////////////////////////////
+import "variable_part.ins"
+import "paths_MPI.ins"
+!//////////////////////////////////////////////////////////////////////////////
+
+mt "mt_man" (
+    gr_mt_man
+    suppress_fire 0 !mt_fire[TODO ] the mt_fire logic currently does not seem to work. But I only  need it for the suppress_fire scenario, so right now, just setting suppress_fire to 0
+)
+
+! AHES: doesn't work like that, turning off.
+!group "group_from_2011"(
+!  suppress_fire 0
+!    suppress_disturbance 0
+!    firstclearcutyear 2011 ! [Q] AHES required here or not?
+!    harvest_system "probability_input" ! AHES Jan 2025: move to shared_settings?
+!)
+
+!! These settings can be retained in all non-harvest managements after 2010 without affecting the results
+group "mt_man_needleleaf" (
+    !mt_man
+    alpha_st 65
+    rdi_target 0.7
+    dens_target_cc 250
+    res_outtake_twig_thin 0.4
+    res_outtake_coarse_root_thin 0
+    res_outtake_twig_cc 0.6
+    res_outtake_coarse_root_cc 0.1
+)
+
+group "mt_man_broadleaf" (
+    !mt_man
+    alpha_st 40
+    rdi_target 0.85
+    dens_target_cc 100
+    res_outtake_twig_thin 0.4
+    res_outtake_coarse_root_thin 0
+    res_outtake_twig_cc 0.6
+    res_outtake_coarse_root_cc 0.1
+)
+
+
+!my solution is to create individual management types to avoid the planting selection problem:
+mt "mt_man_picea" (
+    gr_mt_man
+    selection "Pic_abi" !AHES no Pic_sit allowed, "removed from all stand types" - not sure why
+)
+
+mt "mt_man_Larix" (
+    gr_mt_man
+    selection "Lar_dec"
+)
+
+
+mt "mt_man_Pinus" (
+    gr_mt_man
+    selection "Pin_syl Pin_hal"
+)
+
+
+mt "mt_man_Fagus" (
+    gr_mt_man
+    selection "Fag_syl"
+)
+
+
+mt "mt_man_Quercus" (
+    gr_mt_man
+    selection "Que_ile Que_rob Que_coc Que_pub"
+)
+
+mt "mt_man_otherBL" (
+    gr_mt_man
+    selection "Car_bet Fra_exc Til_cor Bet_pen Bet_pub Cor_ave"
+)
+
+mt "mt_man_otherNL" (
+    gr_mt_man
+    selection "Abi_alb Jun_oxy"
+)
+
+
+! Ulm_gla och Pic_sit removed from all stand types 240605 ML
+
+
+! AHES Jan 2025: management type that suppresses clearcut prob-harvest and disturbances
+!mt "mt_up_tp_incl_2010" (
+!    group_shared_settings
+!    group_up_to_incl_2010
+!)
+
+!! AHES Jan 2025: management type that has enabled clearcut prob-harvest and disturbances
+!mt "mt_from_2011" (
+!    group_shared_settings
+!    group_from_2011
+!)
+
+
+!///////////////////////////////////////////////////////////////////////////////
+! Stand types
+!///////////////////////////////////////////////////////////////////////////////
+
+group "st_man" (
+    common_stand
+    landcover "forest"
+    naturalveg "all"
+    stinclude 1
+)
+
+
+st "Larix" ( ! renamed to match header in net_st_hildaPucherMircaGenusmap Jan 2025 AHES
+    st_man
+    !mt_man
+    management1 "mt_man_Larix"
+    mt2_startyear 2025 ! from gitlab documentation on forest management, parameters_usage.rst
+    management2 "mt_ceaseman_Larix" ! set to mt_man again in variable_part.ins, if scenario is not cease_management; otherwise mimics natural forest.
+)
+
+! any  Picea
+st "Picea" (  ! renamed to match header in net_st_hildaPucherMircaGenusmap Jan 2025 AHES
+    st_man
+    !mt_man
+    management1 "mt_man_picea"
+    mt2_startyear 2025 ! from gitlab documentation on forest management, parameters_usage.rst
+    management2 "mt_ceaseman_picea" ! mt_man again, if scenario is not cease_management, then mimic natural forest.
+)
+
+!any Pinus
+st "Pinus" ( ! renamed to match header in net_st_hildaPucherMircaGenusmap Jan 2025 AHES
+    st_man
+    !mt_man
+    management1 "mt_man_Pinus"
+    mt2_startyear 2025 ! from gitlab documentation on forest management, parameters_usage.rst
+    management2 "mt_ceaseman_Pinus" ! mt_man again, if scenario is not cease_management, then mimic natural forest.
+)
+
+! Fagus_sylvatica
+st "Fagus" (
+    st_man
+    !mt_man
+    management1 "mt_man_Fagus"
+    mt2_startyear 2025 ! from gitlab documentation on forest management, parameters_usage.rst
+    management2 "mt_ceaseman_Fagus" ! mt_man again, if scenario is not cease_management, then mimic natural forest.
+)
+
+! All Quercus alowed:
+st "Quercus" (
+    st_man
+    !mt_man
+    management1 "mt_man_Quercus"
+    mt2_startyear 2025 ! from gitlab documentation on forest management, parameters_usage.rst
+    management2 "mt_ceaseman_Quercus" ! mt_man again, if scenario is not cease_management, then mimic natural forest.
+)
+
+
+! category from Wanda I guess
+st "otherBL" (
+    st_man
+    !mt_man
+    management1 "mt_man_otherBL"
+    mt2_startyear 2025 ! from gitlab documentation on forest management, parameters_usage.rst
+    management2 "mt_ceaseman_otherBL" ! mt_man again, if scenario is not cease_management, then mimic natural forest.
+)
+
+
+!category from Wanda I guess. currently  no picea no pinus no larix
+st "otherNL" (
+    st_man
+    !mt_man
+    management1 "mt_man_otherNL"
+    mt2_startyear 2025 ! from gitlab documentation on forest management, parameters_usage.rst
+    management2 "mt_ceaseman_otherNL" ! mt_man again, if scenario is not cease_management, then mimic natural forest.
+)
+
+! Jan 2025: must be included and turned off, as it is the default
+st "Forest" (
+    stinclude 0
+)
+
+
+! May 2025: must be included and trees omitted. Hilda+ "natural" is shrubs and grasses.
+! trees are omitted by setting group trees in european_pfts to landcover "forest".
+! which hopefully means thy only grow there. Will be tested.
+st "Natural" (
+ landcover "Natural"
+)
+
+![Q] AHES Jan 2025, can I simply add the above management types here, too? test later.
+st "NatForest" (
+  stinclude 1
+  landcover "Forest"
+	suppress_fire 1
+	suppress_disturbance 1
+	![Q] why not also use mt_man and st_man here?
+	! Do I want fire and disturbances suppressed or not here ?
+  ![TODO] is the below the correct start year? should be 2023 or 2024 to match with disturbance input finishing?
+  mt2_startyear 2025 ! from gitlab documentation on forest management, parameters_usage.rst
+  management2 "gr_mt_ceaseman" ! now allow disturbances here, as no longer implicit in age setup of input data.
+)!Martin W in email : "NatForest" which is supposed to be natural PNV forest.
+! JAN 2025 changed "Natural" to "Forest" above, after checking with  Martin W
