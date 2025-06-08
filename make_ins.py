@@ -20,24 +20,28 @@ system_name = platform.system()
 # Assign paths based on the detected system
 if "cosmos" in hostname:
     #current_path = "/lunarc/nobackup/projects/snic2020-6-23/ForestPaths/sims/"
-    guess_link = "/lunarc/nobackup/projects/snic2020-6-23/ForestPaths/european_applications_ForestPaths/build/guess" # not needed, provided in submit.sh
+    guess_link = "/lunarc/nobackup/projects/snic2020-6-23/ForestPaths/european_applications_ForestPaths/build/guess" # actually not needed, provided in submit.sh
     forcing_path = "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/data/isimip/isimip3/"
     other_inputs_path = "/lunarc/nobackup/projects/snic2020-6-23/annemarie/ForestPaths/input/"
-    statepath = "/lunarc/nobackup/projects/snic2020-6-23/annemarie/ForestPaths/sims/base_hist_MPI-ESM1-2-HR_hist_distoff/" # just quicly now..
+    statepath = "/lunarc/nobackup/projects/snic2020-6-23/annemarie/ForestPaths/simsv2/base_hist_MPI-ESM1-2-HR_hist_distoff/" # just quicly now..
+    soil_path = "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/"
 
 elif "simba" in hostname:
     #current_path = "/scratch/annemarie/ForestPaths/sims/"
-    guess_link = "/scratch/annemarie/ForestPaths/european_applications_ForestPaths/build/guess" # not needed, provided in submit.sh
+    guess_link = "/scratch/annemarie/ForestPaths/european_applications_ForestPaths/build/guess" # actually not needed, provided in submit.sh
     forcing_path = "/scratch/data/isimip3/"
     other_inputs_path = "/scratch/annemarie/ForestPaths/input/"
     statepath = "/scratch/annemarie/ForestPaths/sims/"
+    soil_path = "/"
 
 elif system_name == "Darwin":  # MacOS
+# use paths_MPI.ins in main.ins, did not download the same forcing for testing.
     #current_path = "/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/sims/"
     guess_link = "/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/european_applications_ForestPaths/build/guess"
-    forcing_path = "/Users/annemarie/Documents/1_TreeMort/2_Analysis/1_Input/"# just tsting.
-    other_inputs_path = "/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/input/"
+    forcing_path = "/Users/annemarie/Documents/1_TreeMort/2_Analysis/1_Inputs/"# just tsting.
+    other_inputs_path = "/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/"
     statepath = "/scratch/annemarie/ForestPaths/sims/"
+    soil_path = "/Users/annemarie/Documents/1_TreeMort/2_Analysis/1_Inputs/"
 
 else:
     print("Unknown system. Please set paths manually.")
@@ -60,7 +64,7 @@ print(f"Guess Link: {guess_link}")
 
 
 modes1=["base","lightthin", "intensthin","longrot", "shortrot", "rettree", "sfire", "fertfor","ceaseman","ccf"]
-modes2=[ "hist", "ssp126" , "ssp370"] # "hist" already set up and run
+modes2=[ "hist", "ssp126" , "ssp370"] #
 modes3=["diston","distoff"]
 gcm = "MPI-ESM1-2-HR" # usful for non ForestPaths simulations.
 
@@ -77,7 +81,7 @@ def restart_part(mode2,statepath,t):
         firstyear="1850"
         lastyear="2014"
     else:
-        restart=1
+        restart=0
         firstyear="2015"
         lastyear="2100"
     svst=0
@@ -115,12 +119,16 @@ def management_part(mode1,t):
         t.write("!Full clearcut \n")
         t.write('param "retention_tree_fraction" (num 0.00)  \n')
 
-    if mode1 =="nfert";
+    line(t)
+
+    if mode1 =="fertfor":
         t.write("!nfert of stands >mean 20 cm dbh  \n")
-        t.write('param "nfert_scenario" (num 1.0)  \n')
+        t.write('param "fertfor_scenario" (num 1.0)  \n')
     else:
         t.write("!nfert off \n")
-        t.write('param "nfert_scenario" (num 0.00)  \n')
+        t.write('param "fertfor_scenario" (num 0.00)  \n')
+
+    line(t)
 
     #default for fire in management is on, changed for sfire below
     if mode1 != "sfire":
@@ -128,6 +136,8 @@ def management_part(mode1,t):
         t.write( 'suppress_fire 0 \n'  )
         t.write('    cutfirstyear 0 \n')
         t.write(  ')\n'                )
+
+    line(t)
 
     #default for all, except cease_management, changed for cease_management below
     if mode1 != "ceaseman":
@@ -303,7 +313,7 @@ def disturbance_part(mode3,t):
         t.write('    storm_mortality_managed_from 2024   ! Year from which storm mortality is turned on in managed stands\n')
         t.write('    insect_mortality 1\n')
         t.write('    insect_mortality_managed_from 2024  ! Year from which insect mortality is turned on in managed stands\n')
-        t.write('    param "file_windload" (str "/home/anne1212/snic2022-6-59/annemarie/ForestPaths/input/future_disturbances/windloadfromWDP/windload_random2014_2100.txt")\n')
+        t.write('    param "file_windload" (str "'+other_inputs_path+'future_disturbances/windloadfromWDP/windload_random2014_2100.txt")\n')
         t.write('    param "file_dist_wind_prob" (str "")\n')
 
     else:
@@ -360,59 +370,59 @@ def climate_part(mode2,t,forcing_path):
     line(t)
 
     n(t)
-    t.write("!//////// CO2 INPUT   //////////////////////////\n")
+    if system_name != "Darwin":
+        t.write("!//////// CO2 INPUT   //////////////////////////\n")
 
-    t.write('param "file_co2"        (str "'+forcing_path+'co2/co2_'+tmp+'_annual_'+years+'.txt")\n')
-    line(t)
-    t.write("!//////// CLIMATE INPUT   //////////////////////////\n")
-    n(t)
-    t.write('param "variable_temp" (str "tas") \nparam "variable_prec" (str "pr")\nparam "variable_insol"  (str "rsds")\n')
-    t.write('param "variable_wind"  (str "sfcwind")\nparam "variable_relhum" (str "hurs")\nparam "variable_min_temp"  (str "tasmin")\nparam "variable_max_temp"  (str "tasmax")  \n')
-    n(t)
-    t.write('param "file_temp"      (str "'+forcing_path+'climate_land_only_v2/climate3b/' +mode1+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+mode1+'_tas_global_daily_'+years+'.nc4")        \n')
-    t.write('param "file_prec"      (str "'+forcing_path+'climate_land_only_v2/climate3b/' +mode1+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+mode1+'_pr_global_daily_'+years+'.nc4")         \n')
-    t.write('param "file_insol"     (str "'+forcing_path+'climate_land_only_v2/climate3b/' +mode1+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+mode1+'_rsds_global_daily_'+years+'.nc4")       \n')
-    t.write('param "file_wind"      (str "'+forcing_path+'climate_land_only_v2/climate3b/' +mode1+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+mode1+'_sfcwind_global_daily_'+years+'.nc4")    \n')
-    t.write('param "file_relhum"    (str "'+forcing_path+'climate_land_only_v2/climate3b/' +mode1+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+mode1+'_hurs_global_daily_'+years+'.nc4")       \n')
-    t.write('param "file_min_temp"  (str "'+forcing_path+'climate_land_only_v2/climate3b/' +mode1+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+mode1+'_tasmin_global_daily_'+years+'.nc4")     \n')
-    t.write('param "file_max_temp"  (str "'+forcing_path+'climate_land_only_v2/climate3b/' +mode1+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+mode1+'_tasmax_global_daily_'+years+'.nc4")     \n')
-    n(t)
-    t.write('! Wet days can only be used with monthly precipitation   \n')
-    t.write('param "file_wetdays"     (str "")  \n')
-    t.write('param "variable_wetdays" (str "")  \n')
-    n(t)
-    t.write('param "file_vpd"      (str "")      \n')
-    t.write('param "variable_vpd"  (str "")      \n')
-    n(t)
-    t.write('param "file_pres" (str "")          \n')
-    t.write('param "variable_pres" (str "")      \n')
-    n(t)
-    t.write('param "file_specifichum" (str "")   \n')
-    t.write('param "variable_specifichum" (str "")\n')
-    n(t)
-    t.write('! Soil map \n')
-    t.write('param "file_soildata" (str "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/data/soil/WISE/soilmap_center_interpolated.dat") \n') #only appropriate for Cosmos, but hacking this for now.
-    n(t)
+        t.write('param "file_co2"        (str "'+forcing_path+'co2/co2_'+tmp+'_annual_'+years+'.txt")\n')
+        line(t)
+        t.write("!//////// CLIMATE INPUT   //////////////////////////\n")
+        n(t)
+        t.write('param "variable_temp" (str "tas") \nparam "variable_prec" (str "pr")\nparam "variable_insol"  (str "rsds")\n')
+        t.write('param "variable_wind"  (str "sfcwind")\nparam "variable_relhum" (str "hurs")\nparam "variable_min_temp"  (str "tasmin")\nparam "variable_max_temp"  (str "tasmax")  \n')
+        n(t)
+        t.write('param "file_temp"      (str "'+forcing_path+'climate_land_only_v2/climate3b/' +mode1+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+mode1+'_tas_global_daily_'+years+'.nc4")        \n')
+        t.write('param "file_prec"      (str "'+forcing_path+'climate_land_only_v2/climate3b/' +mode1+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+mode1+'_pr_global_daily_'+years+'.nc4")         \n')
+        t.write('param "file_insol"     (str "'+forcing_path+'climate_land_only_v2/climate3b/' +mode1+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+mode1+'_rsds_global_daily_'+years+'.nc4")       \n')
+        t.write('param "file_wind"      (str "'+forcing_path+'climate_land_only_v2/climate3b/' +mode1+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+mode1+'_sfcwind_global_daily_'+years+'.nc4")    \n')
+        t.write('param "file_relhum"    (str "'+forcing_path+'climate_land_only_v2/climate3b/' +mode1+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+mode1+'_hurs_global_daily_'+years+'.nc4")       \n')
+        t.write('param "file_min_temp"  (str "'+forcing_path+'climate_land_only_v2/climate3b/' +mode1+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+mode1+'_tasmin_global_daily_'+years+'.nc4")     \n')
+        t.write('param "file_max_temp"  (str "'+forcing_path+'climate_land_only_v2/climate3b/' +mode1+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+mode1+'_tasmax_global_daily_'+years+'.nc4")     \n')
+        n(t)
+        t.write('! Wet days can only be used with monthly precipitation   \n')
+        t.write('param "file_wetdays"     (str "")  \n')
+        t.write('param "variable_wetdays" (str "")  \n')
+        n(t)
+        t.write('param "file_vpd"      (str "")      \n')
+        t.write('param "variable_vpd"  (str "")      \n')
+        n(t)
+        t.write('param "file_pres" (str "")          \n')
+        t.write('param "variable_pres" (str "")      \n')
+        n(t)
+        t.write('param "file_specifichum" (str "")   \n')
+        t.write('param "variable_specifichum" (str "")\n')
+        n(t)
+        t.write('! Soil map \n')
+        t.write('param "file_soildata" (str "'+soil_path+'data/soil/WISE/soilmap_center_interpolated.dat") \n') #only appropriate for Cosmos, but hacking this for now.
+        n(t)
 
-    t.write("!//////// NITROGEN INPUT   //////////////////////////\n")
+        t.write("!//////// NITROGEN INPUT   //////////////////////////\n")
 
-    t.write("! AHES JAN 2025 added nitrogen inputs below, as per Peter Antoni's GCB instruction file, that uses the isimip  forcing data: \n")
-    t.write("! N deposition (blank string to use constant pre-industrial level of 2 kgN/ha/year, unless netCDF file_mndrydep and file_mnwedep are specified) \n")
-    t.write('param "file_ndep"     (str "") \n')
-    t.write('ndep_timeseries  "" \n')
-    n(t)
-    t.write('param "file_mNHxdrydep" (str "/'+forcing_path+'n-deposition/histsoc-ssp126soc-wetdry-lpjguess/ndep_drynhx_histsoc_'+tmp+'_monthly_'+years+'_lpjg.nc4")   \n')
-    t.write('param "variable_mNHxdrydep" (str "drynhx") \n')
-    t.write('param "file_mNOydrydep" (str "'+forcing_path+'n-deposition/histsoc-ssp126soc-wetdry-lpjguess/ndep_drynoy_histsoc_'+tmp+'_monthly_'+years+'_lpjg.nc4") \n')
-    t.write('param  "variable_mNOydrydep" (str "drynoy") \n')
-    n(t)
-    t.write('param "file_mNHxwetdep" (str "'+forcing_path+'n-deposition/histsoc-ssp126soc-wetdry-lpjguess/ndep_wetnhx_histsoc_'+tmp+'_monthly_'+years+'_lpjg.nc4")  \n')
-    t.write('param "variable_mNHxwetdep" (str "wetnhx") \n')
-    t.write('param "file_mNOywetdep" (str "'+forcing_path+'n-deposition/histsoc-ssp126soc-wetdry-lpjguess/ndep_wetnoy_histsoc_'+tmp+'_monthly_'+years+'_lpjg.nc4") \n')
-    t.write('param "variable_mNOywetdep" (str "wetnoy") \n')
-
-
-
+        t.write("! AHES JAN 2025 added nitrogen inputs below, as per Peter Antoni's GCB instruction file, that uses the isimip  forcing data: \n")
+        t.write("! N deposition (blank string to use constant pre-industrial level of 2 kgN/ha/year, unless netCDF file_mndrydep and file_mnwedep are specified) \n")
+        t.write('param "file_ndep"     (str "") \n')
+        t.write('ndep_timeseries  "" \n')
+        n(t)
+        t.write('param "file_mNHxdrydep" (str "/'+forcing_path+'n-deposition/histsoc-ssp126soc-wetdry-lpjguess/ndep_drynhx_histsoc_'+tmp+'_monthly_'+years+'_lpjg.nc4")   \n')
+        t.write('param "variable_mNHxdrydep" (str "drynhx") \n')
+        t.write('param "file_mNOydrydep" (str "'+forcing_path+'n-deposition/histsoc-ssp126soc-wetdry-lpjguess/ndep_drynoy_histsoc_'+tmp+'_monthly_'+years+'_lpjg.nc4") \n')
+        t.write('param  "variable_mNOydrydep" (str "drynoy") \n')
+        n(t)
+        t.write('param "file_mNHxwetdep" (str "'+forcing_path+'n-deposition/histsoc-ssp126soc-wetdry-lpjguess/ndep_wetnhx_histsoc_'+tmp+'_monthly_'+years+'_lpjg.nc4")  \n')
+        t.write('param "variable_mNHxwetdep" (str "wetnhx") \n')
+        t.write('param "file_mNOywetdep" (str "'+forcing_path+'n-deposition/histsoc-ssp126soc-wetdry-lpjguess/ndep_wetnoy_histsoc_'+tmp+'_monthly_'+years+'_lpjg.nc4") \n')
+        t.write('param "variable_mNOywetdep" (str "wetnoy") \n')
+    else:
+        t.write('import "paths_MPI.ins"')
 
     n(t)
 
@@ -425,7 +435,7 @@ def ndep_part(mode1, mode2,t):
     else:
         mode3=mode2
 
-    if mode1=="fertfor":
+    if system_name != "Darwin":
         t.write('param "file_mNHxdrydep" (str "' +forcing_path+ 'n-deposition/histsoc-' + mode3
                 +'soc-wetdry-lpjguess/ndep_drynhx_histsoc_'+mode3+'_monthly_1850_2100_lpjg.nc4") \n')
         t.write('param "file_mNOydrydep" (str "' +forcing_path+ 'n-deposition/histsoc-' + mode3
@@ -435,22 +445,15 @@ def ndep_part(mode1, mode2,t):
         t.write('param "file_mNOywetdep" (str "' +forcing_path+ 'n-deposition/histsoc-' + mode3
                 +'soc-wetdry-lpjguess/ndep_wetnoy_histsoc_'+mode3+'_monthly_1850_2100_lpjg.nc4") \n')
         n(t)
+        t.write('param "variable_mNHxdrydep" (str "drynhx") \n')
+        t.write('param "variable_mNOydrydep" (str "drynoy")     \n')
+        t.write('param "variable_mNHxwetdep" (str "wetnhx") \n')
+        t.write('param "variable_mNOywetdep" (str "wetnoy")    \n')
+        n(t)
     else:
-        t.write('param "file_mNHxdrydep" (str "' +forcing_path+ 'n-deposition/histsoc-' + mode3
-            +'soc-wetdry-lpjguess/ndep_drynhx_histsoc_'+mode3+'_monthly_1850_2100_lpjg.nc4") \n')
-        t.write('param "file_mNOydrydep" (str "' +forcing_path+ 'n-deposition/histsoc-' + mode3
-                    +'soc-wetdry-lpjguess/ndep_drynoy_histsoc_'+mode3+'_monthly_1850_2100_lpjg.nc4") \n')
-        t.write('param "file_mNHxwetdep" (str "' +forcing_path+ 'n-deposition/histsoc-' + mode3
-                    +'soc-wetdry-lpjguess/ndep_wetnhx_histsoc_'+mode3+'_monthly_1850_2100_lpjg.nc4") \n')
-        t.write('param "file_mNOywetdep" (str "' +forcing_path+ 'n-deposition/histsoc-' + mode3
-                    +'soc-wetdry-lpjguess/ndep_wetnoy_histsoc_'+mode3+'_monthly_1850_2100_lpjg.nc4") \n')
         n(t)
 
-    t.write('param "variable_mNHxdrydep" (str "drynhx") \n')
-    t.write('param "variable_mNOydrydep" (str "drynoy")     \n')
-    t.write('param "variable_mNHxwetdep" (str "wetnhx") \n')
-    t.write('param "variable_mNOywetdep" (str "wetnoy")    \n')
-    n(t)
+
     t.write('!time varying ndep (normal run, default), >0 use ndep of fixed_ndep_year (1)=for the whole run, \n')
     t.write( '!(2)=from fixed_ndep_year onward  (3) // use fixed ndep of fixed_ndep_year for years before it  \n')
     t.write('fixed_ndep 2 !(0)  \n')
@@ -460,8 +463,12 @@ def ndep_part(mode1, mode2,t):
     #t.write('param "file_co2"        (str "/scratch/data/isimip3/co2/co2_hist'+mode3+'_annual_1850_2100.txt")\n')
 
 def popdens(t):
-    t.write('param "file_popdens"    (str "'+forcing_path+'pop/lpjg-popd/population-density_3b_2015soc_30arcmin_annual_1601_2100.lpjg.nc") \n')
-    t.write('param "variable_popdens" (str "popd") \n')
+    if system_name != "Darwin":
+        t.write('param "file_popdens"    (str "'+forcing_path+'pop/lpjg-popd/population-density_3b_2015soc_30arcmin_annual_1601_2100.lpjg.nc") \n')
+        t.write('param "variable_popdens" (str "popd") \n')
+    else:
+        t.write('!param "file_popdens"    (str "'+forcing_path+'pop/lpjg-popd/population-density_3b_2015soc_30arcmin_annual_2010_2019.lpjg.nc") \n')
+        t.write('!param "variable_popdens" (str "popd") \n')
     n(t)
 
 
@@ -547,7 +554,8 @@ for mode1 in modes1:
 
             shutil.copy("submit.sh", folder_name)
 
-            #shutil.copy("paths_MPI.ins", folder_name)
+            if (system_name == "Darwin"):
+                shutil.copy("paths_MPI.ins", folder_name) # put my paths .ins in all folders when running locally.
 
             shutil.copy("gridlist.txt", folder_name)
 
@@ -555,7 +563,8 @@ for mode1 in modes1:
             #shutil.copy("compress.sh", folder_name)
 
             # Create symbolic link inside the folder
-            os.symlink(guess_link, os.path.join(folder_name, "guess_link"))
+            # not needed: LPJ-GUESS gets called from its location, within the submit.sh
+            #os.symlink(guess_link, os.path.join(folder_name, "guess_link"))
 
             #if mode2 == "hist":
             #    continue
@@ -564,3 +573,8 @@ for mode1 in modes1:
             write_insfile(os.path.join(folder_name, "variable_part.ins"), mode1, mode2, mode3, forcing_path, statepath)
 
             print("Created folder: %s" % folder_name)
+
+    # delete the unwanted folder afterwards. This scenario does not exist:
+    unwanted_folder = f"base_hist_MPI-ESM1-2-HR_hist_diston"
+    if os.path.exists(unwanted_folder):
+        shutil.rmtree(unwanted_folder)
