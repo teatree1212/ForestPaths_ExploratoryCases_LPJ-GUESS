@@ -150,7 +150,7 @@ ifslowharvestpool 0                     ! If a slow harvested product pool is in
 !///////////////////////////////////////////////////////////////////////////////
 ! Prescribed disturbance input:
 ! always active if input files are there:
-param "file_dist_clearcut"           (str "/home/anne1212/snic2022-6-59/annemarie/ForestPaths/input/newdisturbance1112/disturbance_0.5deg_fire_use.txt")!AHES Jan 2025 turned clearcut input off, and using probabilistic harvest instead.
+param "file_dist_clearcut"           (str "")!AHES Jan 2025 turned clearcut input off, and using probabilistic harvest instead.
 param "file_dist_fire"             	 (str "/home/anne1212/snic2022-6-59/annemarie/ForestPaths/input/newdisturbance1112/disturbance_0.5deg_fire_use.txt")
 param "file_dist_wind"               (str "/home/anne1212/snic2022-6-59/annemarie/ForestPaths/input/newdisturbance1112/disturbance_0.5deg_wind_use.txt")
 param "file_dist_barkbeetle"	       (str "/home/anne1212/snic2022-6-59/annemarie/ForestPaths/input/newdisturbance1112/disturbance_0.5deg_barkbeetle_use.txt")
@@ -207,16 +207,6 @@ use_presc_ba 0          ! use prescribed burned area to
 !presc_ba_start 2100     ! start year for prescribed BA
 !presc_ba_end 2101 ! end year for prescribed BA
 
-!storm_mortality 0
-!AHES Jan 2025:
-!AHES Jan 2025: disabled feature that insect outbreak and storms would occur in  managed stands only. Now these
-! disturbances occur in all type of stands.
-!storm_mortality_managed_from 2024   ! Year from which storm mortality is turned on in managed stands
-!insect_mortality 0
-!insect_mortality_managed_from 2024  ! Year from which insect mortality is turned on in managed stands
-
-!param "file_windload" (str "/home/anne1212/snic2022-6-59/annemarie/ForestPaths/input/future_disturbances/windloadfromWDP/windload_random2014_2100.txt")
-!param "file_dist_wind_prob" (str "")
 
 !///////////////////////////////////////////////////////////////////////////////
 ! Output files
@@ -504,9 +494,9 @@ pft "Lar_dec" (
 
 !AHES Jan 2025
 ! settings related to setting management and disturbances pre 2010
-group "gr_mt_man" (
-    suppress_fire 1
-    !mt_fire  ! management type sets suppress_fire 0 in variable_parts, updated to 1 in variable_part for sfire. AHES
+! also shared across most future runs:
+group "gr_mt_man_base" (
+    suppress_fire 1 ! on here for historical runs
     relaxed_establishment 1
     stochmort 1         !!
     stochestab 1                        !! US
@@ -525,6 +515,7 @@ group "gr_mt_man" (
 
 ! only used for cease_man scenario. in all others mt_ceaseman contains gr_mt_man
 group "gr_mt_ceaseman" (
+  gr_mt_man_base ! but override some settings now:
   suppress_fire 0
   relaxed_establishment 1
   stochmort  1
@@ -537,16 +528,26 @@ group "gr_mt_ceaseman" (
   cutfirstyear 0          ! suppress clearcut, let the forest transition gradually. the disturbance frequency should probably increase again at this stage.
 )
 
+
+group "gr_mt_fire" (
+   gr_mt_man_base ! but override some settings now:
+   suppress_fire 1
+   cutfirstyear 0
+   suppress_fire_firstyear 1850 !AHES Jun 2025 params must be mentioned here and _lasteryear up to 2100. otherwise, fire suppression will be overwritten by _lastyear from gr_mt_man_base
+   suppress_fire_lastyear 2100
+)
+
 !//////////////////////////////////////////////////////////////////////////////
 !///// SCENARIO _SPEFICIC SETTINGS LOADED HERE:
 !//////////////////////////////////////////////////////////////////////////////
 import "variable_part.ins"
 
 !//////////////////////////////////////////////////////////////////////////////
-
-mt "mt_man" (
-    gr_mt_man
-    suppress_fire 0 !mt_fire[TODO ] the mt_fire logic currently does not seem to work. But I only  need it for the suppress_fire scenario, so right now, just setting suppress_fire to 0
+! [TODO] currently an unnecessary duplication, clean up
+group "gr_mt_man" (
+    gr_mt_man_base
+    !gr_mt_fire
+    !suppress_fire 0 !mt_fire[TODO ] the mt_fire logic currently does not seem to work. But I only  need it for the suppress_fire scenario, so right now, just setting suppress_fire to 0
 )
 
 ! AHES: doesn't work like that, turning off.
@@ -557,84 +558,50 @@ mt "mt_man" (
 !    harvest_system "probability_input" ! AHES Jan 2025: move to shared_settings?
 !)
 
-!! These settings can be retained in all non-harvest managements after 2010 without affecting the results
-group "mt_man_needleleaf" (
-    !mt_man
-    alpha_st 65
-    rdi_target 0.7
-    dens_target_cc 250
-    res_outtake_twig_thin 0.4
-    res_outtake_coarse_root_thin 0
-    res_outtake_twig_cc 0.6
-    res_outtake_coarse_root_cc 0.1
-)
-
-group "mt_man_broadleaf" (
-    !mt_man
-    alpha_st 40
-    rdi_target 0.85
-    dens_target_cc 100
-    res_outtake_twig_thin 0.4
-    res_outtake_coarse_root_thin 0
-    res_outtake_twig_cc 0.6
-    res_outtake_coarse_root_cc 0.1
-)
 
 
 !my solution is to create individual management types to avoid the planting selection problem:
 mt "mt_man_picea" (
-    gr_mt_man
+    gr_mt_man_base
     selection "Pic_abi" !AHES no Pic_sit allowed, "removed from all stand types" - not sure why
 )
 
 mt "mt_man_Larix" (
-    gr_mt_man
+    gr_mt_man_base
     selection "Lar_dec"
 )
 
 
 mt "mt_man_Pinus" (
-    gr_mt_man
+    gr_mt_man_base
     selection "Pin_syl Pin_hal"
 )
 
 
 mt "mt_man_Fagus" (
-    gr_mt_man
+    gr_mt_man_base
     selection "Fag_syl"
 )
 
 
 mt "mt_man_Quercus" (
-    gr_mt_man
+    gr_mt_man_base
     selection "Que_ile Que_rob Que_coc Que_pub"
 )
 
 mt "mt_man_otherBL" (
-    gr_mt_man
+    gr_mt_man_base
     selection "Car_bet Fra_exc Til_cor Bet_pen Bet_pub Cor_ave"
 )
 
 mt "mt_man_otherNL" (
-    gr_mt_man
+    gr_mt_man_base
     selection "Abi_alb Jun_oxy"
 )
 
 
 ! Ulm_gla och Pic_sit removed from all stand types 240605 ML
 
-
-! AHES Jan 2025: management type that suppresses clearcut prob-harvest and disturbances
-!mt "mt_up_tp_incl_2010" (
-!    group_shared_settings
-!    group_up_to_incl_2010
-!)
-
-!! AHES Jan 2025: management type that has enabled clearcut prob-harvest and disturbances
-!mt "mt_from_2011" (
-!    group_shared_settings
-!    group_from_2011
-!)
 
 
 !///////////////////////////////////////////////////////////////////////////////
@@ -654,7 +621,7 @@ st "Larix" ( ! renamed to match header in net_st_hildaPucherMircaGenusmap Jan 20
     !mt_man
     management1 "mt_man_Larix"
     mt2_startyear 2025 ! from gitlab documentation on forest management, parameters_usage.rst
-    management2 "mt_ceaseman_Larix" ! set to mt_man again in variable_part.ins, if scenario is not cease_management; otherwise mimics natural forest.
+    management2 "mt_casespecific_Larix" ! set to mt_man again in variable_part.ins, if scenario is not cease_management; otherwise mimics natural forest. of if scnario is sfire, will turn off fire.
 )
 
 ! any  Picea
@@ -663,7 +630,7 @@ st "Picea" (  ! renamed to match header in net_st_hildaPucherMircaGenusmap Jan 2
     !mt_man
     management1 "mt_man_picea"
     mt2_startyear 2025 ! from gitlab documentation on forest management, parameters_usage.rst
-    management2 "mt_ceaseman_picea" ! mt_man again, if scenario is not cease_management, then mimic natural forest.
+    management2 "mt_casespecific_picea" ! mt_man again, if scenario is not cease_management, then mimic natural forest.
 )
 
 !any Pinus
@@ -672,7 +639,7 @@ st "Pinus" ( ! renamed to match header in net_st_hildaPucherMircaGenusmap Jan 20
     !mt_man
     management1 "mt_man_Pinus"
     mt2_startyear 2025 ! from gitlab documentation on forest management, parameters_usage.rst
-    management2 "mt_ceaseman_Pinus" ! mt_man again, if scenario is not cease_management, then mimic natural forest.
+    management2 "mt_casespecific_Pinus" ! mt_man again, if scenario is not cease_management, then mimic natural forest.
 )
 
 ! Fagus_sylvatica
@@ -681,7 +648,7 @@ st "Fagus" (
     !mt_man
     management1 "mt_man_Fagus"
     mt2_startyear 2025 ! from gitlab documentation on forest management, parameters_usage.rst
-    management2 "mt_ceaseman_Fagus" ! mt_man again, if scenario is not cease_management, then mimic natural forest.
+    management2 "mt_casespecific_Fagus" ! mt_man again, if scenario is not cease_management, then mimic natural forest.
 )
 
 ! All Quercus alowed:
@@ -690,7 +657,7 @@ st "Quercus" (
     !mt_man
     management1 "mt_man_Quercus"
     mt2_startyear 2025 ! from gitlab documentation on forest management, parameters_usage.rst
-    management2 "mt_ceaseman_Quercus" ! mt_man again, if scenario is not cease_management, then mimic natural forest.
+    management2 "mt_casespecific_Quercus" ! mt_man again, if scenario is not cease_management, then mimic natural forest.
 )
 
 
@@ -700,7 +667,7 @@ st "otherBL" (
     !mt_man
     management1 "mt_man_otherBL"
     mt2_startyear 2025 ! from gitlab documentation on forest management, parameters_usage.rst
-    management2 "mt_ceaseman_otherBL" ! mt_man again, if scenario is not cease_management, then mimic natural forest.
+    management2 "mt_casespecific_otherBL" ! mt_man again, if scenario is not cease_management, then mimic natural forest.
 )
 
 
@@ -710,7 +677,7 @@ st "otherNL" (
     !mt_man
     management1 "mt_man_otherNL"
     mt2_startyear 2025 ! from gitlab documentation on forest management, parameters_usage.rst
-    management2 "mt_ceaseman_otherNL" ! mt_man again, if scenario is not cease_management, then mimic natural forest.
+    management2 "mt_casespecific_otherNL" ! mt_man again, if scenario is not cease_management, then mimic natural forest.
 )
 
 ! Jan 2025: must be included and turned off, as it is the default

@@ -23,7 +23,7 @@ if "cosmos" in hostname:
     guess_link = "/lunarc/nobackup/projects/snic2020-6-23/ForestPaths/european_applications_ForestPaths/build/guess" # actually not needed, provided in submit.sh
     forcing_path = "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/data/isimip/isimip3/"
     other_inputs_path = "/lunarc/nobackup/projects/snic2020-6-23/annemarie/ForestPaths/input/"
-    statepath = "/lunarc/nobackup/projects/snic2020-6-23/annemarie/ForestPaths/simsv2/base_hist_MPI-ESM1-2-HR_hist_distoff/" # just quicly now..
+    #statepath = "/lunarc/nobackup/projects/snic2020-6-23/annemarie/ForestPaths/simsv2/base_hist_MPI-ESM1-2-HR_hist_distoff/" # just quicly now.. obsolete, Jun 2025
     soil_path = "/lunarc/nobackup/projects/snic2020-6-23/lpjguess/"
 
 elif "simba" in hostname:
@@ -31,7 +31,7 @@ elif "simba" in hostname:
     guess_link = "/scratch/annemarie/ForestPaths/european_applications_ForestPaths/build/guess" # actually not needed, provided in submit.sh
     forcing_path = "/scratch/data/isimip3/"
     other_inputs_path = "/scratch/annemarie/ForestPaths/input/"
-    statepath = "/scratch/annemarie/ForestPaths/sims/"
+    #statepath = "/scratch/annemarie/ForestPaths/sims/"
     soil_path = "/"
 
 elif system_name == "Darwin":  # MacOS
@@ -40,7 +40,7 @@ elif system_name == "Darwin":  # MacOS
     guess_link = "/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/european_applications_ForestPaths/build/guess"
     forcing_path = "/Users/annemarie/Documents/1_TreeMort/2_Analysis/1_Inputs/"# just tsting.
     other_inputs_path = "/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/"
-    statepath = "/scratch/annemarie/ForestPaths/sims/"
+    #statepath = "/scratch/annemarie/ForestPaths/sims/"
     soil_path = "/Users/annemarie/Documents/1_TreeMort/2_Analysis/1_Inputs/"
 
 else:
@@ -63,9 +63,9 @@ print(f"Guess Link: {guess_link}")
 ###################################################################################################################################
 
 
-modes1=["base","lightthin", "intensthin","longrot", "shortrot", "rettree", "sfire", "fertfor","ceaseman","ccf"]
-modes2=[ "hist", "ssp126" , "ssp370"] #
-modes3=["diston","distoff"]
+modes1= ["base","lightthin", "intensthin","longrot", "shortrot", "rettree", "sfire", "fertfor","ceaseman","ccf"]
+modes2= [ "histssp126", "histssp370", "ssp126" , "ssp370"] # the first two modes act as "historic" forcing up to 2024. climate and co2 will have diverged by then, starting from 2015. To avoid jumps in forcing and outputs, we have to create these individual historical forcings.
+modes3= ["diston","distoff"]
 gcm = "MPI-ESM1-2-HR" # usful for non ForestPaths simulations.
 
 
@@ -75,15 +75,32 @@ def line(t):
 def n(t):
     t.write("\n")
 
-def restart_part(mode2,statepath,t):
-    if mode2=="hist":
-        restart=0
-        firstyear="1850"
-        lastyear="2014"
+def restart_part(mode2,t):
+    # Base historical runs (cold start)
+    if mode2 in ["histssp126", "histssp370"]:
+        restart = 0
+        firstyear = "1850"
+        lastyear = "2024"
+        #actual_statepath = statepath  # Use the original statepath for base runs
+        restart_folder = restart_folder = f"base_hist_{gcm}_{mode2}_distoff"
     else:
-        restart=0
-        firstyear="2015"
-        lastyear="2100"
+        # Future scenarios - restart from appropriate base historical run
+        restart = 1
+        firstyear = "2025"
+        lastyear = "2100"
+
+        # Determine which base historical run to restart from
+        if mode2 == "ssp126":
+            restart_folder = f"base_hist_{gcm}_histssp126_distoff"
+        elif mode2 == "ssp370":
+            restart_folder = f"base_hist_{gcm}_histssp370_distoff"
+        else:
+            # Fallback - shouldn't happen with your current setup
+            restart_folder = f"base_hist_{gcm}_histssp126_distoff"
+
+    # Set statepath to the restart folder (assuming they're in the same directory)
+    statepath = os.path.abspath(restart_folder)
+
     svst=0
     if restart == 0:
         svst=1
@@ -93,7 +110,7 @@ def restart_part(mode2,statepath,t):
     t.write("restart "+str(restart)+"\n")
     t.write("save_state "+str(svst)+"\n")
     t.write('state_path "'+statepath+'"\n')
-    t.write("state_year 1364\n") #AHES should not be 650 but 2014? 2014-1200 = 1364 ; length(seq(650,2014,1)) [1] 1365; "works" with 1200
+    t.write("state_year 1374\n") #AHES should not be 650 but 2024? 2024-1200 = 1374 ; length(seq(650,2024,1)) [1] 1375; "works" with 1200
     t.write("firsthistyear "+firstyear+"\n")
     t.write("lasthistyear "+lastyear+"\n")
     line(t)
@@ -130,57 +147,52 @@ def management_part(mode1,t):
 
     line(t)
 
-    #default for fire in management is on, changed for sfire below
-    if mode1 != "sfire":
-        t.write( 'group "mt_fire" ( \n')
-        t.write( 'suppress_fire 0 \n'  )
-        t.write('    cutfirstyear 0 \n')
-        t.write(  ')\n'                )
 
     line(t)
 
-    #default for all, except cease_management, changed for cease_management below
-    if mode1 != "ceaseman":
-        t.write( '!only in the cease_management scenario, ceasman contains different specified options \n')
-        t.write( '!my solution is to create individual management types to avoid the planting selection problem, and the linearity of the insfiles:\n')
-        t.write( 'mt "mt_ceaseman_picea" (\n')
-        t.write( '    gr_mt_man\n'         )
+    #default for all, except cease_management and sfire, changed for cease_management and sfire below
+    if mode1 not in ["ceaseman","sfire"]:
+        t.write( '!Should in the ceaseman and sfire scenarios, we need different specified options \n')
+        t.write( '!my solution is to create individual management types that replace "gr_mt_man_base", to avoid the planting selection problem, and the linearity of the insfiles:\n')
+        t.write( '!below, nothing should change in the setup, but it has to be repeated.\n')
+        t.write( 'mt "mt_casespecific_picea" (\n')
+        t.write( '    gr_mt_man_base\n'         )
         t.write( '    selection "Pic_abi" !AHES no Pic_sit allowed, "removed from all stand types" - not sure why\n')
         t.write('    cutfirstyear 0 \n')
         t.write( ')\n'                    )
 
-        t.write('mt "mt_ceaseman_Larix" (\n')
-        t.write('    gr_mt_man\n')
+        t.write('mt "mt_casespecific_Larix" (\n')
+        t.write('    gr_mt_man_base\n')
         t.write('    selection "Lar_dec"\n')
         t.write('    cutfirstyear 0 \n')
         t.write(')\n')
 
-        t.write('mt "mt_ceaseman_Pinus" (\n')
-        t.write('    gr_mt_man\n')
+        t.write('mt "mt_casespecific_Pinus" (\n')
+        t.write('    gr_mt_man_base\n')
         t.write('    selection "Pin_syl Pin_hal"\n')
         t.write('    cutfirstyear 0 \n')
         t.write(')\n')
 
-        t.write('mt "mt_ceaseman_Fagus" (\n')
-        t.write('    gr_mt_man\n')
+        t.write('mt "mt_casespecific_Fagus" (\n')
+        t.write('    gr_mt_man_base\n')
         t.write('    selection "Fag_syl"\n')
         t.write('    cutfirstyear 0 \n')
         t.write(')\n')
 
-        t.write('mt "mt_ceaseman_Quercus" (\n')
-        t.write('    gr_mt_man\n')
+        t.write('mt "mt_casespecific_Quercus" (\n')
+        t.write('    gr_mt_man_base\n')
         t.write('    selection "Que_ile Que_rob Que_coc Que_pub"\n')
         t.write('    cutfirstyear 0 \n')
         t.write(')\n')
 
-        t.write('mt "mt_ceaseman_otherBL" (\n')
-        t.write('    gr_mt_man\n')
+        t.write('mt "mt_casespecific_otherBL" (\n')
+        t.write('    gr_mt_man_base\n')
         t.write('    selection "Car_bet Fra_exc Til_cor Bet_pen Bet_pub Cor_ave"\n')
         t.write('    cutfirstyear 0 \n')
         t.write(')\n')
 
-        t.write('mt "mt_ceaseman_otherNL" (\n')
-        t.write('    gr_mt_man\n')
+        t.write('mt "mt_casespecific_otherNL" (\n')
+        t.write('    gr_mt_man_base\n')
         t.write('    selection "Abi_alb Jun_oxy"\n')
         t.write('    cutfirstyear 0 \n')
         t.write(')\n')
@@ -248,10 +260,44 @@ def management_part(mode1,t):
         t.write('param "file_woodharv_size_preference_NL" (str "'+other_inputs_path+'Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/size_target_Conifer.txt_luc_coords_added")\n')
 
         if mode1 == "sfire":
-             t.write( 'group "mt_fire" ( \n')
-             t.write( 'suppress_fire 1 \n'  )
-             t.write( 'cutfirstyear 0 \n')
-             t.write(  ')\n'                )
+             #default for all, except cease_management, changed for cease_management below
+             t.write( '!only in the cease_management scenario, ceasman contains different specified options \n')
+             t.write( '!my solution is to create individual management types to avoid the planting selection problem, and the linearity of the insfiles:\n')
+             t.write( 'mt "mt_casespecific_picea" (\n')
+             t.write( '   gr_mt_fire\n'       )
+             t.write( '   cutfirstyear 0 \n'      )
+             t.write( ')\n'                       )
+
+             t.write('mt "mt_casespecific_Larix" (\n')
+             t.write('    gr_mt_fire\n'      )
+             t.write('    cutfirstyear 0 \n'     )
+             t.write(')\n')
+
+             t.write('mt "mt_casespecific_Pinus" (\n')
+             t.write('    gr_mt_fire\n')
+             t.write('    cutfirstyear 0 \n')
+             t.write(')\n')
+
+             t.write('mt "mt_casespecific_Fagus" (\n')
+             t.write('    gr_mt_fire\n')
+             t.write('    cutfirstyear 0 \n')
+             t.write(')\n')
+
+             t.write('mt "mt_casespecific_Quercus" (\n')
+             t.write('    gr_mt_fire\n')
+             t.write('    cutfirstyear 0 \n')
+             t.write(')\n')
+
+             t.write('mt "mt_casespecific_otherBL" (\n')
+             t.write('    gr_mt_fire\n')
+             t.write('    cutfirstyear 0 \n')
+             t.write(')\n')
+
+             t.write('mt "mt_casespecific_otherNL" (\n')
+             t.write('    gr_mt_fire\n')
+             t.write('    cutfirstyear 0 \n')
+             t.write(')\n')
+
 
 
              # here I am trying to immitate a management type that reflects no management, it is supposed to start in year 2025, and that is set in main.ins
@@ -259,37 +305,37 @@ def management_part(mode1,t):
              #default for all, except cease_management, changed for cease_management below
              t.write( '!only in the cease_management scenario, ceasman contains different specified options \n')
              t.write( '!my solution is to create individual management types to avoid the planting selection problem, and the linearity of the insfiles:\n')
-             t.write( 'mt "mt_ceaseman_picea" (\n')
+             t.write( 'mt "mt_casespecific_picea" (\n')
              t.write( '   gr_mt_ceaseman\n'       )
              t.write( '   cutfirstyear 0 \n'      )
              t.write( ')\n'                       )
 
-             t.write('mt "mt_ceaseman_Larix" (\n')
+             t.write('mt "mt_casespecific_Larix" (\n')
              t.write('    gr_mt_ceaseman\n'      )
              t.write('    cutfirstyear 0 \n'     )
              t.write(')\n')
 
-             t.write('mt "mt_ceaseman_Pinus" (\n')
+             t.write('mt "mt_casespecific_Pinus" (\n')
              t.write('    gr_mt_ceaseman\n')
              t.write('    cutfirstyear 0 \n')
              t.write(')\n')
 
-             t.write('mt "mt_ceaseman_Fagus" (\n')
+             t.write('mt "mt_casespecific_Fagus" (\n')
              t.write('    gr_mt_ceaseman\n')
              t.write('    cutfirstyear 0 \n')
              t.write(')\n')
 
-             t.write('mt "mt_ceaseman_Quercus" (\n')
+             t.write('mt "mt_casespecific_Quercus" (\n')
              t.write('    gr_mt_ceaseman\n')
              t.write('    cutfirstyear 0 \n')
              t.write(')\n')
 
-             t.write('mt "mt_ceaseman_otherBL" (\n')
+             t.write('mt "mt_casespecific_otherBL" (\n')
              t.write('    gr_mt_ceaseman\n')
              t.write('    cutfirstyear 0 \n')
              t.write(')\n')
 
-             t.write('mt "mt_ceaseman_otherNL" (\n')
+             t.write('mt "mt_casespecific_otherNL" (\n')
              t.write('    gr_mt_ceaseman\n')
              t.write('    cutfirstyear 0 \n')
              t.write(')\n')
@@ -356,17 +402,16 @@ def landcover_part(mode, lcfilespath,filenameext,t):
 
 
 def climate_part(mode2,t,forcing_path):
-    if mode2 == "hist":
-        years="1850_2100"
-        mode1="ssp126" # hacking this - as the historical part is identical in all ssps, just select this one to get historic forcing for the spinup.
-        tmp = "histssp126"
-        #co2string=mode1
-        n(t)
-    else:
-        years="1850_2100"
-        mode1=mode2
-        tmp =str("hist"+mode2) # seems I have to load in the files from 1850 onwards, otherwise the restart doesn't wnt to work for me.
-        #co2string="hist" # to enable flexible reading in of co2 files
+    if mode2 in ["histssp126", "histssp370"]:  # Historical scenarios
+        years = "1850_2100"
+        # Extract the SSP part for forcing files
+        ssp_scenario = mode2.replace("hist", "")  # get "ssp126" or "ssp370"
+        tmp = mode2  # "histssp126" or "histssp370"
+    else:  # Future scenarios
+        years = "1850_2100"
+        ssp_scenario = mode2  # "ssp126" or "ssp370"
+        tmp = f"hist{mode2}"  # "histssp126" or "histssp370"
+
     line(t)
 
     n(t)
@@ -380,13 +425,13 @@ def climate_part(mode2,t,forcing_path):
         t.write('param "variable_temp" (str "tas") \nparam "variable_prec" (str "pr")\nparam "variable_insol"  (str "rsds")\n')
         t.write('param "variable_wind"  (str "sfcwind")\nparam "variable_relhum" (str "hurs")\nparam "variable_min_temp"  (str "tasmin")\nparam "variable_max_temp"  (str "tasmax")  \n')
         n(t)
-        t.write('param "file_temp"      (str "'+forcing_path+'climate_land_only_v2/climate3b/' +mode1+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+mode1+'_tas_global_daily_'+years+'.nc4")        \n')
-        t.write('param "file_prec"      (str "'+forcing_path+'climate_land_only_v2/climate3b/' +mode1+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+mode1+'_pr_global_daily_'+years+'.nc4")         \n')
-        t.write('param "file_insol"     (str "'+forcing_path+'climate_land_only_v2/climate3b/' +mode1+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+mode1+'_rsds_global_daily_'+years+'.nc4")       \n')
-        t.write('param "file_wind"      (str "'+forcing_path+'climate_land_only_v2/climate3b/' +mode1+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+mode1+'_sfcwind_global_daily_'+years+'.nc4")    \n')
-        t.write('param "file_relhum"    (str "'+forcing_path+'climate_land_only_v2/climate3b/' +mode1+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+mode1+'_hurs_global_daily_'+years+'.nc4")       \n')
-        t.write('param "file_min_temp"  (str "'+forcing_path+'climate_land_only_v2/climate3b/' +mode1+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+mode1+'_tasmin_global_daily_'+years+'.nc4")     \n')
-        t.write('param "file_max_temp"  (str "'+forcing_path+'climate_land_only_v2/climate3b/' +mode1+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+mode1+'_tasmax_global_daily_'+years+'.nc4")     \n')
+        t.write('param "file_temp"      (str "'+forcing_path+'climate_land_only_v2/climate3b/' +ssp_scenario+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+ssp_scenario+'_tas_global_daily_'+years+'.nc4")        \n')
+        t.write('param "file_prec"      (str "'+forcing_path+'climate_land_only_v2/climate3b/' +ssp_scenario+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+ssp_scenario+'_pr_global_daily_'+years+'.nc4")         \n')
+        t.write('param "file_insol"     (str "'+forcing_path+'climate_land_only_v2/climate3b/' +ssp_scenario+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+ssp_scenario+'_rsds_global_daily_'+years+'.nc4")       \n')
+        t.write('param "file_wind"      (str "'+forcing_path+'climate_land_only_v2/climate3b/' +ssp_scenario+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+ssp_scenario+'_sfcwind_global_daily_'+years+'.nc4")    \n')
+        t.write('param "file_relhum"    (str "'+forcing_path+'climate_land_only_v2/climate3b/' +ssp_scenario+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+ssp_scenario+'_hurs_global_daily_'+years+'.nc4")       \n')
+        t.write('param "file_min_temp"  (str "'+forcing_path+'climate_land_only_v2/climate3b/' +ssp_scenario+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+ssp_scenario+'_tasmin_global_daily_'+years+'.nc4")     \n')
+        t.write('param "file_max_temp"  (str "'+forcing_path+'climate_land_only_v2/climate3b/' +ssp_scenario+'/MPI-ESM1-2-HR-lpjg/mpi-esm1-2-hr_r1i1p1f1_w5e5_hist_'+ssp_scenario+'_tasmax_global_daily_'+years+'.nc4")     \n')
         n(t)
         t.write('! Wet days can only be used with monthly precipitation   \n')
         t.write('param "file_wetdays"     (str "")  \n')
@@ -412,7 +457,7 @@ def climate_part(mode2,t,forcing_path):
         t.write('param "file_ndep"     (str "") \n')
         t.write('ndep_timeseries  "" \n')
         n(t)
-        t.write('param "file_mNHxdrydep" (str "/'+forcing_path+'n-deposition/histsoc-ssp126soc-wetdry-lpjguess/ndep_drynhx_histsoc_'+tmp+'_monthly_'+years+'_lpjg.nc4")   \n')
+        t.write('param "file_mNHxdrydep" (str "'+forcing_path+'n-deposition/histsoc-ssp126soc-wetdry-lpjguess/ndep_drynhx_histsoc_'+tmp+'_monthly_'+years+'_lpjg.nc4")   \n')
         t.write('param "variable_mNHxdrydep" (str "drynhx") \n')
         t.write('param "file_mNOydrydep" (str "'+forcing_path+'n-deposition/histsoc-ssp126soc-wetdry-lpjguess/ndep_drynoy_histsoc_'+tmp+'_monthly_'+years+'_lpjg.nc4") \n')
         t.write('param  "variable_mNOydrydep" (str "drynoy") \n')
@@ -430,10 +475,10 @@ def climate_part(mode2,t,forcing_path):
 
 
 def ndep_part(mode1, mode2,t):
-    if mode2=="hist":
-        mode3="ssp370"
+    if mode2.startswith("hist"):
+        mode3 = mode2.replace("hist", "")  # Extract "ssp126" or "ssp370"
     else:
-        mode3=mode2
+        mode3 = mode2  # For future scenarios
 
     if system_name != "Darwin":
         t.write('param "file_mNHxdrydep" (str "' +forcing_path+ 'n-deposition/histsoc-' + mode3
@@ -473,7 +518,7 @@ def popdens(t):
 
 
 #filenameext
-def write_insfile(filename,mode1,mode2,mode3,forcing_path,statepath):
+def write_insfile(filename,mode1,mode2,mode3,forcing_path):#,statepath):
     t=open(filename,"w")
     t.write("!//////////////////////////////////////////////////////////////////////////////\n")
     t.write("!/////////////      VARIABLE PART OF LPJ-GUESS INS FILES     \n")
@@ -482,22 +527,21 @@ def write_insfile(filename,mode1,mode2,mode3,forcing_path,statepath):
     n(t)
     n(t)
     #AHES constant : t.write('param "file_gridlist" (str "'+gridlist+'") \n')
-    if mode2=="hist":
-        restart_part(mode2,statepath,t)
+    if mode2 in ["histssp126", "histssp370"]:  # Historical scenarios
+        restart_part(mode2, t)
         n(t)
-        climate_part(mode2,t,forcing_path)
-        ndep_part(mode1,mode2,t)
-        management_part(mode1,t)
-        popdens(t) #AHES not actually variable in scenarios, but path varies
-    else:
-        restart_part(mode2,statepath,t)
+        climate_part(mode2, t, forcing_path)
+        ndep_part(mode1, mode2, t)
+        management_part(mode1, t)
+        popdens(t)
+    else:  # Future scenarios
+        restart_part(mode2, t)
         n(t)
-        #AHES constant : landcover_part(mode1,lupath,lufileext,t)
-        climate_part(mode2,t,forcing_path)
-        ndep_part(mode1,mode2,t)
-        management_part(mode1,t)
-        disturbance_part(mode3,t)
-        popdens(t) #not actually variable, bu tpath varies
+        climate_part(mode2, t, forcing_path)
+        ndep_part(mode1, mode2, t)
+        management_part(mode1, t)
+        disturbance_part(mode3, t)
+        popdens(t)
     t.close()
 
 
@@ -517,17 +561,21 @@ for mode1 in modes1:
     for mode2 in modes2:
 
          # Only allow 'base_hist' combo when mode2 is 'hist'
-        if mode2 == "hist" and mode1 != "base":
+        if mode2  in ["histssp126", "histssp370"] and mode1 != "base":
             continue
 
         # Set up folder prefix
-        if mode2 == "hist":
+        if mode2 in ["histssp126", "histssp370"]:
             prefix = f"{mode1}_hist_{gcm}_{mode2}"
         else:
             prefix = f"{mode1}_fut_{gcm}_{mode2}"
 
         for mode3 in modes3:
             folder_name = f"{prefix}_{mode3}"
+
+            # Skip diston for historical scenarios - only allow distoff
+            if mode2 in ["histssp126", "histssp370"] and mode3 == "diston":
+                continue
 
             # Check if we're filtering for a specific scenario to be updated for its run settings:
             if target_folder and folder_name != target_folder:
@@ -570,7 +618,7 @@ for mode1 in modes1:
             #    continue
             #else:
                 # Generate variable_part.ins inside the folder
-            write_insfile(os.path.join(folder_name, "variable_part.ins"), mode1, mode2, mode3, forcing_path, statepath)
+            write_insfile(os.path.join(folder_name, "variable_part.ins"), mode1, mode2, mode3, forcing_path)#, statepath)
 
             print("Created folder: %s" % folder_name)
 
