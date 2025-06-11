@@ -1,0 +1,625 @@
+---
+title: "Run_preps_cleaned"
+author: "Annemarie Eckes-Shephard"
+date: "2025-06-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(ggplot2)
+library(sf)
+
+```
+
+
+Needs more cleaning, but these are the essential input file preparation and exploration steps I took for ForestPaths sims.
+
+## 21.01.2025 creation of gridlist file
+There must be some missing gridcells in the simulation, which fails in places:
+I gapfilled some of Susanna's grids to make compatible with the LU file from Martin.
+
+```{r gridlist_checks_and_create_gridlist}
+# Load the maps package
+library(maps)
+# Load necessary libraries
+library(dplyr)
+# Set up the plotting layout for 4 maps (2 rows, 2 columns)
+par(mfrow = c(2, 2), mar = c(2, 2, 2, 2))  # Reduced margins
+
+############################################################
+# Combine broadleaf and conifer lat lons
+Forest_harv_coords_BL <- read.table(file = "../Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/intensity_mean_Broadleaf.txt",header=TRUE)
+coords_BL <- unique(Forest_harv_coords_BL[,c("lon","lat")],)
+Forest_harv_coords_CO <- read.table(file = "../Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/intensity_mean_Conifer.txt",header=TRUE)
+coords_CO<- unique(Forest_harv_coords_CO[,c("lon","lat")],)
+
+tmp <- rbind(coords_CO,coords_BL)
+Prob_harvest_latlon<- unique(tmp)
+names(Prob_harvest_latlon) <- c("Lon","Lat")
+
+# Set up the plot
+map(
+    "world",                      # Map data
+    xlim = c(-25, 35),            # Longitude range
+    ylim = c(35, 70),             # Latitude range
+    col = "gray80",               # Color of land
+    fill = TRUE,                  # Fill the polygons
+    border = "gray50",            # Border color of countries
+    bg = "lightblue",             # Background color (ocean)
+    lwd = 0.5                    # Line width for borders
+)
+
+points(Prob_harvest_latlon$Lon,Prob_harvest_latlon$Lat, col=1,pch=16,cex=0.6)
+mtext(side=3,"probabilistic harvest")
+
+
+############################################################
+#landuse change
+#echo "Lon Lat" > latlon_lu.txt
+#awk '$3 <= 2009 { print $1, $2 }' lucrop_hildaPucherMircaGenusmap.txt  > latlon_lu.txt
+#awk '$3 <= 2009 { print $1, $2 }' luforest_hildaPucherMircaGenusmap.txt  >> latlon_lu.txt
+lucrop <- unique(read.table("../landuse_change_forest_age/latlon_lu.txt",header = TRUE)[,c("Lon","Lat")])
+
+# check against other landuse files:
+luc <- unique(read.table("../landuse_change_forest_age/lu_inputfiles_noNF/net_lu_HildaPucherMircaEurope.txt",header = TRUE)[,c("Lon","Lat")])
+
+# Set up the plot
+map(
+    "world",                      # Map data
+    xlim = c(-25, 35),            # Longitude range
+    ylim = c(35, 70),             # Latitude range
+    col = "gray80",               # Color of land
+    fill = TRUE,                  # Fill the polygons
+    border = "gray50",            # Border color of countries
+    bg = "lightblue",             # Background color (ocean)
+    lwd = 0.5                    # Line width for borders
+)
+
+mtext(side=3,"landuse change")
+points(lucrop$Lon,lucrop$Lat,col="purple",pch=16,cex=0.4)
+points(luc$Lon,luc$Lat,col="red",pch=16,cex=0.4) ## check against other landuse input files:
+
+#sanity-check they are indeed covering the same lat lon extent:
+# Find combinations in lucrop but not in luc
+in_lucrop_not_in_luc <- setdiff(luc, lucrop)
+
+# Find combinations in luc but not in lucrop
+in_luc_not_in_lucrop <- setdiff(lucrop, luc)
+
+#both named listes with no content. So there is a total overlap between the two datasets. that's good
+#in_luc_not_in_lucrop 
+#in_lucrop_not_in_luc
+
+############################################################
+#current gridlist in use: 
+# Jun: nb this is no longer the "current" gridlist. but is expanded to accommodate the whole Prob harvest, Lu extent.
+gridlist <- read.table("../european_applications/testrun/gridlist_fix_europe_rand_plus_norway_26gc.txt")
+names(gridlist) <- c("Lon","Lat")
+# Set up the plot
+map(
+    "world",                      # Map data
+    xlim = c(-25, 35),            # Longitude range
+    ylim = c(35, 70),             # Latitude range
+    col = "gray80",               # Color of land
+    fill = TRUE,                  # Fill the polygons
+    border = "gray50",            # Border color of countries
+    bg = "lightblue",             # Background color (ocean)
+    lwd = 0.5                    # Line width for borders
+)
+
+mtext(side=3,"gridlist")
+points(gridlist$Lon,gridlist$Lat,col="blue",pch=10,cex=0.4)
+############################################################
+
+
+############################################################
+#disturbance input 
+#on Simba in the disturbance input folder:
+#echo "Lon Lat" > dist_coords.txt
+#awk 'NR >1 { print $1, $2 }'  disturbance_0.5deg_harvest_use.txt >> dist_coords.txt
+#awk 'NR >1 { print $1, $2 }'  disturbance_0.5deg_wind_use.txt >> dist_coords.txt
+#awk 'NR >1 { print $1, $2 }'  disturbance_0.5deg_barkbeetle_use.txt >> dist_coords.txt
+#awk 'NR > 1 { print $1, $2 }' disturbance_0.5deg_fire_use.txt >> dist_coords.txt
+#disturbance coords
+distcoords <- unique(read.table("../disturbance/dist_coords.txt",header = TRUE)[,c("Lon","Lat")])
+
+# Set up the plot
+map(
+    "world",                      # Map data
+    xlim = c(-25, 35),            # Longitude range
+    ylim = c(35, 70),             # Latitude range
+    col = "gray80",               # Color of land
+    fill = TRUE,                  # Fill the polygons
+    border = "gray50",            # Border color of countries
+    bg = "lightblue",             # Background color (ocean)
+    lwd = 0.5                    # Line width for borders
+)
+
+mtext(site=3,"disturbance")
+points(distcoords$Lon,distcoords$Lat,col="orange",pch=10,cex=0.4)
+############################################################
+
+mtext(outer=TRUE, side=3, "Inpute file- coordinate extents", line=-2)
+
+
+
+#crossover between prob_harvest and landuse:
+ 
+# Set up the plot
+map(
+    "world",                      # Map data
+    xlim = c(-25, 35),            # Longitude range
+    ylim = c(35, 70),             # Latitude range
+    col = "gray80",               # Color of land
+    fill = TRUE,                  # Fill the polygons
+    border = "gray50",            # Border color of countries
+    bg = "lightblue",             # Background color (ocean)
+    lwd = 0.5                    # Line width for borders
+)
+ 
+points(Prob_harvest_latlon$Lon,Prob_harvest_latlon$Lat, col=1,pch=16,cex=0.6)
+points(luc$Lon,luc$Lat,col="red",pch=16,cex=0.4) ## check against other landuse input files:
+
+
+shared_by_both <- inner_join(Prob_harvest_latlon, luc, by = c("Lat", "Lon"))
+points(shared_by_both$Lon,shared_by_both$Lat,col="magenta",pch=16,cex=0.3)
+
+
+
+# Step 1: Get rows unique to Prob_harvest_latlon (not in luc)
+unique_to_prob_harvest <- anti_join(Prob_harvest_latlon, luc, by = c("Lat", "Lon"))
+points(unique_to_prob_harvest$Lon,unique_to_prob_harvest$Lat,col="green",pch=16,cex=0.6)
+
+# Step 2: Get rows unique to luc (not in Prob_harvest_latlon)
+unique_to_luc <- anti_join(luc, Prob_harvest_latlon, by = c("Lat", "Lon"))
+points(unique_to_luc$Lon,unique_to_luc$Lat,col="yellow",pch=16,cex=0.6)
+
+# Step 3: Combine the unique rows from both data frames (union)
+unique_latlon <- bind_rows(unique_to_prob_harvest, unique_to_luc)
+
+#sanity check that it covers everything:
+#points(unique_latlon$Lon,unique_latlon$Lat, col="grey", cex=0.5)
+
+plot.new()
+legend(legend=c("crossover","unique_to_prob_h","unique_to_luc"),fill=c("magenta","green","yellow"),"topleft")
+
+##create gridlist that contains the landuse-change map as basis: 
+write.table(file="../european_applications/testrun/gridlist_final.txt",luc, col.names =FALSE,row.names=FALSE)
+
+#some points that fail (March 2025:)
+# points(20.2500, 68.7500)
+# points(15.7500, 66.2500)
+# points(17.7500, 67.7500)
+# points(-1.250, 49.250)
+# points(20.75, 45.75)
+#lat= 68.75
+#lon= 20.25
+#exists <- any(Prob_harvest_latlon$Lon == lon & Prob_harvest_latlon$Lat == lat)
+#print(exists)
+#exists <- any(luc$Lon ==lon & luc$Lat == lat)
+#print(exists)
+#exists <- any(unique_to_prob_harvest$Lon == lon & unique_to_prob_harvest$Lat == lat)
+#print(exists)
+#exists <- any(unique_to_luc$Lon == lon & unique_to_luc$Lat == lat)
+#print(exists)
+
+```
+
+
+To create a gridlist that contains all complete latitude-longitude combinations of the landuse change-map, 
+we have to gap-fill probabilistic harvest for 87 locations on the map. To identify the datapoints with which to gap fill, we use the Haversine distance formula. This formula computes the distance between two points on the Earth's surface given their latitude and longitude (black dots in the above plot are the outcome)
+
+```{r gap_fill_prob_harvest}
+library(geosphere)
+
+#visualise problem: lat lons don't fully overlap:
+map(
+    "world",                      # Map data
+    xlim = c(-25, 35),            # Longitude range
+    ylim = c(35, 70),             # Latitude range
+    col = "gray80",               # Color of land
+    fill = TRUE,                  # Fill the polygons
+    border = "gray50",            # Border color of countries
+    bg = "lightblue",             # Background color (ocean)
+    lwd = 0.5                    # Line width for borders
+)
+ 
+points(Prob_harvest_latlon$Lon,Prob_harvest_latlon$Lat, col=1,pch=16,cex=0.6)
+points(luc$Lon,luc$Lat,col="red",pch=16,cex=0.4) ## check against other landuse input files:
+
+# "wrong: full join not useful here"
+# shared_by_both <- full_join(Prob_harvest_latlon, luc, by = c("Lat", "Lon"))
+# points(shared_by_both$Lon,shared_by_both$Lat,col="magenta",pch=16,cex=0.3)
+
+
+# Step 1: Get rows unique to Prob_harvest_latlon (not in luc)
+unique_to_prob_harvest <- anti_join(Prob_harvest_latlon, luc, by = c("Lat", "Lon"))
+points(unique_to_prob_harvest$Lon,unique_to_prob_harvest$Lat,col="green",pch=16,cex=0.6)
+
+# Step 2: Get rows unique to luc (not in Prob_harvest_latlon)
+unique_to_luc <- anti_join(luc, Prob_harvest_latlon, by = c("Lat", "Lon"))
+points(unique_to_luc$Lon,unique_to_luc$Lat,col="yellow",pch=16,cex=0.6)
+
+# we need to consider the "yellow dots" in the probabilistic harvest dataframe, too.
+
+####################################################################################################################
+#find what forest type and harvest intensity is in nearest neighbour cells:
+#forest type:
+
+Forest_harv_coords_BL <- read.table(file = "../Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/intensity_mean_Broadleaf.txt",header=TRUE)
+coords_BL <- unique(Forest_harv_coords_BL[,c("lon","lat")],)
+
+Forest_harv_coords_CO <- read.table(file = "../Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/intensity_mean_Conifer.txt",header=TRUE)
+coords_CO<- unique(Forest_harv_coords_CO[,c("lon","lat")],)
+
+# Create a function to find closest coordinates - distVincentySphere
+find_closest_coordinates <- function(unique_to_luc, Forest_harv_coords_BL) {
+  # Initialize a dataframe to store closest coordinates
+  closest_coords <- data.frame(luc_lat = numeric(), luc_lon = numeric(),
+                               lat = numeric(), lon = numeric(), dist = numeric())
+  
+  # Iterate through each row in unique_to_luc
+  for (i in 1:nrow(unique_to_luc)) {
+    # Get lat and lon of the current point in unique_to_luc
+    luc_lat <- unique_to_luc$lat[i]
+    luc_lon <- unique_to_luc$lon[i]
+    
+    # Calculate distances from the current point to all points in Forest_harv_coords_BL
+    distances <- distVincentySphere(c(luc_lon, luc_lat), cbind(Forest_harv_coords_BL$lon, Forest_harv_coords_BL$lat))
+    
+    # Find the index of the closest point
+    closest_index <- which.min(distances)
+    
+    # Store the closest coordinates, distance, and the original lat-lon from unique_to_luc
+    closest_coords <- rbind(closest_coords, data.frame(luc_lat = luc_lat,
+                                                       luc_lon = luc_lon,
+                                                       lat = Forest_harv_coords_BL$lat[closest_index],
+                                                       lon = Forest_harv_coords_BL$lon[closest_index],
+                                                       dist = distances[closest_index]))
+  }
+  
+  return(closest_coords)
+}
+
+# create function that uses the filename as input and then updates the file with the missing (unique_to_luc) lat lon combinations:
+gapfill_using_closest_coordinates <- function(filename,unique_to_luc,show_it_works =FALSE){
+  
+    #just in case, adjust names to lower case:
+    names(unique_to_luc) <- c("lon","lat")
+    
+    input_data_to_be_gapfilled <-  read.table(file = filename,header=TRUE)
+    # Call the function and get the closest coordinates
+    closest_coords <- find_closest_coordinates(unique_to_luc, input_data_to_be_gapfilled)
+    
+    # View the result
+    if(show_it_works){
+      points(closest_coords$lon,closest_coords$lat,col="black",cex=0.6,pch=16)
+      legend(legend=c("crossover","unique_to_prob_h","unique_to_luc","nearest gridcell"),fill=c("magenta","green","yellow",1),"topleft",cex=0.7)
+    }
+    
+    
+    # merged_df contains after this the new lat lon combinations that were originally missing in Forest_harv_coords. Their data comes from the  lat lons that are the closest to the missing lat lons.
+    merged_df <- merge(input_data_to_be_gapfilled,closest_coords, by = c("lat", "lon"))
+    
+    #remove the "old" lat and lon and rename the luc_coords to be the new lat lons. we then have duplicate content in all other columns, except for lat and lon for these closest_coords ( have gapfilled):
+    merged_df$lat <- NULL
+    merged_df$lon <- NULL
+    merged_df$dist <- NULL
+    # Rename luc_lat to lat and luc_lon to lon
+    colnames(merged_df)[colnames(merged_df) == "luc_lat"] <- "lat"
+    colnames(merged_df)[colnames(merged_df) == "luc_lon"] <- "lon"
+    
+    #now append to the Prob_harvest dataframe:
+    complete_grid <- rbind(input_data_to_be_gapfilled,merged_df)
+    
+    if(show_it_works){
+      points(complete_grid$lon,complete_grid$lat,cex=0.4,col="grey",pch=16)
+    }
+    
+    # sanity check:
+     #different_rows <- sum(!apply(complete_grid[1:3075,] == input_data_to_be_gapfilled, 1, all, na.rm = TRUE))
+    #different_rows
+
+   # Replace 0 values with "0.0000000"
+    complete_grid_final <- data.frame(lapply(complete_grid, function(x) {
+      if (is.numeric(x)) {
+        # Format values: replace 0 with "0.0000000", keep others as they are
+        ifelse(x == 0, format(0, nsmall = 7), x)
+      } else {
+        x
+      }
+    }))
+
+    # write to file:
+    write.table(complete_grid_final, file= paste0(filename,"_luc_coords_added"),row.names = FALSE,col.names=TRUE,quote=FALSE)
+
+}
+
+
+files <- c(
+"../Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/intensity_mean_Conifer.txt",
+"../Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/intensity_mean_Broadleaf.txt",
+"../Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/intensity_sd_Broadleaf.txt", 
+"../Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/intensity_sd_Conifer.txt",
+"../Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/p_clearcut_Broadleaf.txt",
+"../Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/p_clearcut_Conifer.txt",
+"../Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/p_harvest_Broadleaf.txt",
+"../Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/p_harvest_Conifer.txt",  
+"../Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/size_target_Broadleaf.txt",
+"../Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/size_target_Conifer.txt"     
+)
+
+for(filename in files){
+  gapfill_using_closest_coordinates(filename,unique_to_luc)
+}
+
+# santiy_check:
+ins <- read.table("../Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/intensity_mean_Broadleaf.txt_luc_coords_added",head=TRUE)
+points(ins$lon,ins$lat,col="dark green",pch=16,cex=0.3)
+# it works! 
+# [Q] is it a problem that Probharvest has more gridcells that gridlist? 
+# this is now adressed anyways, by harmonising the gridlist
+
+
+
+```
+
+# landcover explorations
+
+To get an understanding of what the landcover and genera input data looks like: 
+What about the stand types and when do Wanda's genera come in?
+
+```{r landuse_genus_area_change_explorations}
+
+insss <- read.table("../landuse_change_forest_age/lu_inputfiles_noNF/luforest_HildaPucherMircaEurope.txt",header = TRUE)
+insss_sub <- insss[which(insss$Lon==23.75 & insss$Lat ==35.25),]
+
+# Pivoting from wide to long format
+insss_long <- insss_sub %>%
+  tidyr::pivot_longer(cols = c(Larix, Picea, Pinus, Fagus, Quercus, otherNL, otherBL, NatForest),
+               names_to = "Forest_Cover", 
+               values_to = "Fraction")
+# Stacked area chart with smoothing
+insss_long %>% 
+  ggplot(aes(Year, Fraction, fill = Forest_Cover,  color = Forest_Cover)) +
+  geom_area() 
+
+#trying a couple more, to see whether this trend persists:
+insss_sub <- insss[which(insss$Lon==5.75 & insss$Lat ==43.25),]
+
+# Pivoting from wide to long format
+insss_long <- insss_sub %>%
+  tidyr::pivot_longer(cols = c(Larix, Picea, Pinus, Fagus, Quercus, otherNL, otherBL, NatForest),
+               names_to = "Forest_Cover", 
+               values_to = "Fraction")
+
+# Stacked area chart with smoothing
+insss_long %>% 
+  ggplot(aes(Year, Fraction, fill = Forest_Cover,  color = Forest_Cover)) +
+  geom_area() 
+
+insss_sub <- insss[which(insss$Lon==31.75 & insss$Lat ==62.75),]
+
+# Pivoting from wide to long format
+insss_long <- insss_sub %>%
+  tidyr::pivot_longer(cols = c(Larix, Picea, Pinus, Fagus, Quercus, otherNL, otherBL, NatForest),
+               names_to = "Forest_Cover", 
+               values_to = "Fraction")
+# Stacked area chart with smoothing
+insss_long %>% 
+  ggplot(aes(Year, Fraction, fill = Forest_Cover,  color = Forest_Cover)) +
+  geom_area() 
+
+
+insss <- read.table("../landuse_change_forest_age/lu_inputfiles_noNF/net_lu_HildaPucherMircaEurope.txt",header = TRUE)
+insss_sub <- insss[which(insss$Lon==5.75 & insss$Lat ==43.25),]
+
+# Pivoting from wide to long format
+insss_long <- insss_sub %>%
+  tidyr::pivot_longer(cols = c(URBAN, CROPLAND, PASTURE, FOREST, NATURAL, BARREN),
+               names_to = "Landusecover", 
+               values_to = "Fraction")
+# Stacked area chart with smoothing
+insss_long %>% 
+  ggplot(aes(Year, Fraction, fill = Landusecover,  color = Landusecover)) +
+  geom_area() 
+
+
+
+
+# if you need to read this in again:
+
+insss_sub <- insss[which(insss$Year==2100),]
+insss_sub_sf <- st_as_sf(insss_sub, coords = c('Lon', 'Lat'))
+ggplot(insss_sub_sf) + 
+  #geom_sf(aes(fill=NATURAL)) + scale_fill_viridis_c(option = "plasma", limits = c(0, 0.3)) 
+  geom_tile(data = insss_sub, 
+             aes(x = Lon, y = Lat, fill = NATURAL)) +  # Plot 'NATURAL' fraction as color
+     scale_fill_viridis_c(option = "plasma", limits = c(0, 0.3)) +  # Adjust scale to 0-0.3
+     coord_fixed() +  # Maintain correct aspect ratio
+     labs(title = "Natural Land Fraction in 2100", 
+          x = "Longitude", y = "Latitude", fill = "Fraction") +
+     theme_minimal()
+
+```
+
+```{r plot_fractional_cover_genera}
+
+ss <- read.table("../landuse_change_forest_age/lu_inputfiles_noNF2/net_lu_HildaPucherMircaEurope.txt",header = TRUE)
+#lc 3 st fraction next year sum is zero. Check input data
+
+ss_sub <- ss[which(ss$Year==2010),]
+ss_sub <- ss[which(ss$Lon== 17.75 & ss$Lat==67.75),]
+plot(ss_sub$URBAN)
+
+ss <- read.table("/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/landuse_change_forest_age/lu_inputfiles_noNF3/luforest_HildaPucherMircaEurope.txt",header = TRUE)
+#-1.25,49.25
+ss_sub <- ss[which(ss$Year>=1900 & ss$Year <= 1905 & ss$Lon== -1.25 & ss$Lat==49.25),]
+
+ss_sub <- ss[which(ss$Year==2014),]
+
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# Reshape data to long format
+ss_long <- ss_sub %>%
+  pivot_longer(cols = Larix:otherBL, names_to = "Genus", values_to = "Fractional_Cover")
+
+# Plot maps
+ggplot(ss_long, aes(x = Lon, y = Lat, fill = Fractional_Cover)) +
+  geom_tile() +
+  scale_fill_viridis_c(option = "plasma", name = "Fractional Cover") + # Color scale
+  facet_wrap(~Genus, ncol = 4) + # Arrange maps in a grid
+  coord_fixed() + # Ensure correct aspect ratio
+  labs(title = "Fractional Cover of Genera", x = "Longitude", y = "Latitude") +
+  theme_minimal()
+
+```
+
+
+
+-------------------------------------------------------------------------------
+
+# Management options
+
+## Lighten and intensify thinning 
+
+"Decrease intensity of all commercial thinnings by 25%, while holding rotation length fixed"
+
+```{r process_and_visualise_probharv_intensity_changes}
+
+#function to reduce all thinning intensity values by 25%:
+reduce_by_25 <- function(df) {
+  df[-c(1, 2)] <- lapply(df[-c(1, 2)], function(x) ifelse(x != 0, x * 0.75, 0))
+  return(df)
+}
+
+#function to increase all thinning intensity values by 25%:
+increase_by_25 <- function(df) {
+  df[-c(1, 2)] <- lapply(df[-c(1, 2)], function(x) ifelse(x != 0, x * 1.25, 0))
+  return(df)
+}
+
+
+# Define folder path
+#this folder contains Susanna's Probabilistic harvest routine already distributed across the latlon combinations.
+folder_path <- "../Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/"
+folder_path <- "../Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/"
+
+# List all files that start with "intensity_" and end with "_luc_coords_added"
+file_list <- list.files(folder_path, pattern = "^intensity_.*_luc_coords_added$", full.names = TRUE)
+
+# Function to process files
+# writes directly to output file with updated name _red or _inc
+process_file <- function(file) {
+  # Read in the file
+  df <- read.table(file, header = TRUE)
+
+  # Apply transformations
+  df_red <- reduce_by_25(df)
+  df_inc <- increase_by_25(df)
+
+  # Generate new filenames
+  file_red <- paste0(file, "_red")
+  file_inc <- paste0(file, "_inc")
+
+  # Save the transformed data
+  write.table(df_red, file = file_red, col.names = TRUE, row.names = FALSE,quote = FALSE)
+  write.table(df_inc, file = file_inc, col.names = TRUE, row.names = FALSE,quote = FALSE)
+
+  message("Processed: ", file)
+}
+
+# Apply the function to each file in the list
+lapply(file_list, process_file)
+
+########################
+# sanity-check:
+check_function_sd <- read.table(paste0(folder_path,"intensity_sd_Broadleaf.txt_luc_coords_added"),header = TRUE)
+check_function_inc <- read.table(paste0(folder_path,"intensity_sd_Broadleaf.txt_luc_coords_added_inc"),header = TRUE)
+check_function_red <- read.table(paste0(folder_path,"intensity_sd_Broadleaf.txt_luc_coords_added_red"),header = TRUE)
+
+plot("n", xlim=c(-0.5,1), ylim=c(0,10),main="thinning\nintensity-occurrence\n across Europe", ylab="density", xlab="standard_deviation")
+lines(density(check_function_sd$D25_BA0), col="black",lwd=2)
+lines(density(check_function_inc$D25_BA0), col="red")
+lines(density(check_function_red$D25_BA0), col="blue")
+plot.new()
+legend(legend=c("default","increased thinning", "decreased thinning"),fill=c(1,"red","blue"),"topright",cex=0.7)
+```
+
+
+
+## shorten and lengthen rotation periods
+
+"Decrease or increase in rotation length, approximated by 25% increase or decrease of target diameter"
+
+Right now I am increasing or decreasing the probability of harvest for a given diameter, that is different, isn't it? No, it's not ( see notes in chunk harvets_by_size_testing)
+
+
+```{r process_and_visualise_probharv_size_target_changes}
+
+#function to reduce all thinning intensity values by 25%:
+reduce_by_25 <- function(df) {
+  df[-c(1, 2)] <- lapply(df[-c(1, 2)], function(x) ifelse(x != 0, x * 0.75, 0))
+  return(df)
+}
+
+#function to increase all thinning intensity values by 25%:
+increase_by_25 <- function(df) {
+  df[-c(1, 2)] <- lapply(df[-c(1, 2)], function(x) ifelse(x != 0, x * 1.25, 0))
+  return(df)
+}
+
+
+# Define folder path
+#this folder contains Susanna's Probabilistic harvest routine already distributed across the latlon combinations.
+folder_path <- "../Probabilistic_harvest/lpjg_inputfiles_extrapolate_fmapOnly6_041224/"
+
+# List all files that start with "intensity_" and end with "_luc_coords_added"
+file_list <- list.files(folder_path, pattern = "^p_harvest.*_luc_coords_added$", full.names = TRUE)
+
+# Function to process files
+# writes directly to output file with updated name _red or _inc
+process_file <- function(filename) {
+  # Read in the file
+  df <- read.table(filename, header = TRUE)
+
+  # Apply transformations
+  df_red <- reduce_by_25(df)
+  df_inc <- increase_by_25(df)
+
+  # Generate new filenames
+  file_red <- paste0(filename, "_red")
+  file_inc <- paste0(filename, "_inc")
+
+  # Save the transformed data
+  write.table(df_red, file = file_red, col.names = TRUE, row.names = FALSE,quote = FALSE)
+  write.table(df_inc, file = file_inc, col.names = TRUE, row.names = FALSE,quote = FALSE)
+
+  message("Processed: ", filename)
+}
+
+# Apply the function to each file in the list
+lapply(file_list, process_file)
+
+########################
+# sanity-check:
+check_function_sd  <- read.table(paste0(folder_path,"p_harvest_Broadleaf.txt_luc_coords_added"),header = TRUE)
+check_function_inc <- read.table(paste0(folder_path,"p_harvest_Broadleaf.txt_luc_coords_added_inc"),header = TRUE)
+check_function_red <- read.table(paste0(folder_path,"p_harvest_Broadleaf.txt_luc_coords_added_red"),header = TRUE)
+
+
+plot("n", xlim=c(-0.05,0.1), ylim=c(0,50),main="harvest thresholds across Europe", ylab="density", xlab="standard_deviation")
+lines(density(check_function_sd$D25_BA0), col="black",lwd=2)
+lines(density(check_function_inc$D25_BA0), col="red")
+lines(density(check_function_red$D25_BA0), col="blue")
+
+legend(legend=c("default ","increased probability", "decreased probability"),fill=c(1,"red","blue"),"topright",cex=0.6)
+
+```
+
+
+
