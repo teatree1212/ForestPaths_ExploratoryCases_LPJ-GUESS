@@ -21,11 +21,13 @@ library(tidyr)
 library(tidyverse)
 library(reldist)
 
+source("..helper_functions.R")
+
 # we use management names, and ForestPaths uses cases ( numbers). here I can quickly map one to the other:
 # from Table 2b in Exploratory Cases M7.
 # 999 means these are not actually part of ForestPaths
-cases=data.frame( man=c("base","lightthin", "intensthin","longrot", "shortrot", "rettree", "fertfor","ceaseman"), #"sfire","ccf"
-                  FPcase = c(0  ,       6,          7   , 8      ,      9    ,    10    ,     12   ,    14    ) ) #11 , 999
+cases=data.frame( man=c("base","lightthin", "intensthin","longrot", "shortrot", "rettree", "fertfor","ceaseman", "sfire"), #,"ccf"
+                  FPcase = c(0  ,       6,          7   , 8      ,      9    ,    10    ,     12   ,    14     , 11) )# , 999
 
 
 #also create the correct expression for Scenario:
@@ -41,89 +43,6 @@ forestcover_fractions_from_2025 <- read.table("../landuse_change_forest_age/lu_i
 forestcover_fractions_from_2025 <- setDT(forestcover_fractions_from_2025[which(forestcover_fractions_from_2025$Year==2025),])
 write.table(forestcover_fractions_from_2025,"/Users/annemarie/Documents/1_TreeMort/2_Analysis/3_analysis_ForestPaths_Exploratory_runs/notes/forest_cover_fractions_from_2025.txt")
 
-# necessary data to calculate volume -relvated outputs
-# from a grep on pft and woddens on LPJ-GUESS instruction file:
-raw_data <- c(
-  'pft "Abi_alb" (', 'wooddens 252.5',
-  'pft "BES" (', 
-  'pft "Bet_pen" (', 'wooddens 285.0',
-  'pft "Bet_pub" (', 'wooddens 285.0',
-  'pft "Car_bet" (', 'wooddens 340.0',
-  'pft "Cor_ave" (', 'wooddens 292.5',
-  'pft "Fag_syl" (', 'wooddens 337.5',
-  'pft "Fra_exc" (', 'wooddens 332.5',
-  'pft "Jun_oxy" (', 'wooddens 287.5',
-  'pft "Lar_dec" (', 'wooddens 262.5',
-  'pft "MRS" (',
-  'pft "Pic_abi" (', 'wooddens 225.0',
-  'pft "Pic_sit" (', 'wooddens 182.5',
-  'pft "Pin_syl" (', 'wooddens 282.5',
-  'pft "Pin_hal" (', 'wooddens 307.5',
-  'pft "Pop_tre" (', 'wooddens 238.8',
-  'pft "Que_coc" (', 'wooddens 257.5',
-  'pft "Que_ile" (', 'wooddens 420.0',
-  'pft "Que_pub" (', 'wooddens 377.5',
-  'pft "Que_rob" (', 'wooddens 307.5',
-  'pft "Til_cor" (', 'wooddens 227.5',
-  'pft "Ulm_gla" (', 'wooddens 312.5'
-)
-
-# Initialize vectors to store PFT names and wood density values
-pfts <- c()
-wooddens_vals <- c()
-
-# Loop through the data to extract PFT names and wood density values
-for (i in 1:(length(raw_data) - 1)) {
-  if (grepl('^pft', raw_data[i])) {
-    # Extract the PFT name from the current line
-    pft_name <- sub('^pft "', '', raw_data[i])
-    pft_name <- sub('" \\(', '', pft_name)
-    
-    # The next line should contain the wooddens value
-    if (grepl('wooddens', raw_data[i + 1])) {
-      wooddens_value <- sub('^wooddens ', '', raw_data[i + 1])
-      pfts <- c(pfts, pft_name)
-      wooddens_vals <- c(wooddens_vals, wooddens_value)
-    }
-  }
-}
-
-# Create a dataframe
-df_wooddens <- data.frame(PFT = pfts, WoodDensity = as.numeric(wooddens_vals))
-
-
-
-
-# Define Luforest categories and their corresponding PFTs
-luforest_categories <- list(
-  Quercus = c("Que_ile", "Que_rob", "Que_pub"),
-  Fagus = c("Fag_syl"),
-  Pinus = c("Pin_syl", "Pin_hal"),
-  Picea = c("Pic_abi"),
-  Larix = c("Lar_dec"),
-  otherBL = c("Car_bet", "Fra_exc", "Til_cor", "Bet_pen", "Bet_pub", "Cor_ave"),
-  otherNL = c("Abi_alb", "Jun_oxy"),
-  NatForest = c("Pin_syl", "Pin_hal","Abi_alb", "Jun_oxy","Car_bet", "Fra_exc", "Til_cor", "Bet_pen", "Bet_pub", "Cor_ave","Lar_dec","Pic_abi","Que_ile", "Que_rob", "Que_pub","Fag_syl"),
-  Forest_sum = c("Pin_syl", "Pin_hal","Abi_alb", "Jun_oxy","Car_bet", "Fra_exc", "Til_cor", "Bet_pen", "Bet_pub", "Cor_ave","Lar_dec","Pic_abi","Que_ile", "Que_rob", "Que_pub","Fag_syl")
-)
-
-# Create an empty dataframe to store the mean wood density for each Luforest category
-mean_wooddensity_df <- data.frame(Luforest = character(0), MeanWoodDensity = numeric(0))
-
-# Loop through each Luforest category to calculate the mean wood density
-for (category in names(luforest_categories)) {
-  # Get the PFTs for this category
-  pfts_in_category <- luforest_categories[[category]]
-  
-  # Filter the df to get the wood density for these PFTs
-  wooddens_in_category <- df_wooddens[df_wooddens$PFT %in% pfts_in_category, "WoodDensity"]
-  
-  # Calculate the mean wood density for this category
-  mean_wooddensity <- mean(wooddens_in_category, na.rm = TRUE)
-  
-  # Add the result to the new dataframe
-  mean_wooddensity_df <- rbind(mean_wooddensity_df, data.frame(Luforest = category, MeanWoodDensity = mean_wooddensity))
-}
 
 
 #helper function:
@@ -292,14 +211,15 @@ create_Forest_Paths_table <- function(myData_in, var, unitss,NATURAL = NULL){
 ###################################################
 # file and case preparations: 
 
-base_dir <- "/Volumes/Anne's Passport/ForestPaths/sims/sims_backup/simsv8/" 
-processed_folder <- "/Volumes/Anne's Passport/ForestPaths/processed/v9/"
-
-managementslist <- c("base","lightthin", "intensthin","longrot", "shortrot","fertfor","rettree")# "ceaseman""sfire","","ccf")
-#Volumes/My\ Passport/ForestPaths/sims
+base_dir <- "/Volumes/Anne's Backup/v13/"  #"/Volumes/Anne's Passport/ForestPaths/sims/sims_backup/simsv8/" 
+processed_folder <- "/Volumes/Anne's Backup/processed/v13" # "/Volumes/Anne's Passport/ForestPaths/processed/v9/"
+#"base","shortrot",
+managementslist <- c("shortrot")#fertfor","rettree","fertfor","rettree","base")# "ceaseman""sfire","","ccf")
+#Volumes/My\ Passport/ForestPaths/sims #"lightthin", "intensthin","longrot", "shortrot",
+# don't forget: shortrot ssp370
 #management = "ceaseman"
 #scenario ="ssp126"
-scenariolist <- c("ssp126","ssp370")
+scenariolist <- c("ssp370")#"ssp126"
 for(management in managementslist){
   for(scenario in scenariolist){
     
@@ -460,7 +380,7 @@ for(management in managementslist){
     
     # Vector of columns to pivot (all DBH classes)
     dbh_cols <- c("0_5", "5_10", "10_15", "15_20", "20_25", "25_30", "30_35", 
-                  "35_40", "40_45", "45_50", "50_55", "55_60", "60_65", "65_70", "70_75",  "75_80" ,  "80_85" ,  "85_90" ,  "90_95"  , "95_100",  "100_105", "105_110" ,"110_115", "115_120" ,"120_125", "125_130", "130_135", "135_140", "140_145", "145_150" ,">150" )
+                  "35_40", "40_45", "45_50", "50_55", "55_60", "60_65", "65_70", "70_75",  "75_80" ,  "80_85" ,  "85_90" ,  "90_95"  , "95_100",  "100_105", "105_110" ,"110_115", "115_120" ,"120_125", "125_130", "130_135", "135_140", "140_145", "145_150" ,"gt150" )
     
     dbh_mids <- c(
       "0_5" = 2.5, "5_10" = 7.5, "10_15" = 12.5, "15_20" = 17.5,
@@ -470,7 +390,7 @@ for(management in managementslist){
       "80_85" = 82.5, "85_90" = 87.5, "90_95" = 92.5, "95_100" = 97.5,
       "100_105" = 102.5, "105_110" = 107.5, "110_115" = 112.5, "115_120" = 117.5,
       "120_125" = 122.5, "125_130" = 127.5, "130_135" = 132.5, "135_140" = 137.5,
-      "140_145" = 142.5, "145_150" = 147.5, ">150" = 152.5
+      "140_145" = 142.5, "145_150" = 147.5, "gt150" = 152.5
     )
     for(stand_type in standtypes){
       #address input file differences for total forest and stand types
@@ -485,7 +405,7 @@ for(management in managementslist){
       
       # Pivot from wide to long format
       dt_long <- myData@data %>%
-        pivot_longer(cols = `0_5`:`>150`,
+        pivot_longer(cols = `0_5`:`gt150`,
                      names_to = "dbh_class",
                      values_to = "cmass_dbh_weight")
       
@@ -585,7 +505,7 @@ for(management in managementslist){
     
     # Define the column names that are involved in counting as veteran trees: 
     vet_trees_40    <- c(   "40_45"  , "45_50" ,  "50_55",   "55_60"  , "60_65" ,  "65_70" ,  "70_75" ,  "75_80"  ,
-                            "80_85" ,  "85_90" ,  "90_95" ,  "95_100" , "100_105", "105_110", "110_115" ,"115_120", "120_125", "125_130" ,"130_135" ,"135_140", "140_145", "145_150", ">150" )
+                            "80_85" ,  "85_90" ,  "90_95" ,  "95_100" , "100_105", "105_110", "110_115" ,"115_120", "120_125", "125_130" ,"130_135" ,"135_140", "140_145", "145_150", "gt150" )
     
     
     # Veteran_trees_40:
@@ -627,7 +547,7 @@ for(management in managementslist){
     
     # Define the column names that are involved in counting as veteran trees: 
     vet_trees_50<- c( "50_55",   "55_60"  , "60_65" ,  "65_70" ,  "70_75" ,  "75_80"  ,
-                      "80_85" ,  "85_90" ,  "90_95" ,  "95_100" , "100_105", "105_110", "110_115" ,"115_120", "120_125", "125_130" ,"130_135" ,"135_140", "140_145", "145_150", ">150" )
+                      "80_85" ,  "85_90" ,  "90_95" ,  "95_100" , "100_105", "105_110", "110_115" ,"115_120", "120_125", "125_130" ,"130_135" ,"135_140", "140_145", "145_150", "gt150" )
     
     # Veteran_trees_40:
     myData@data$Veteran_trees_50   <- rowSums(myData@data[,..vet_trees_50]) /10000
@@ -1238,9 +1158,6 @@ for(management in managementslist){
     
     
     # NBP - forest
-    # [TODO] rerun with updated  cflux table 
-    # [TODO] cross-check with Tom's plots from the FORWARDS presentations
-    # DO NOT PROVIDE THIS TIME. 
     ########################################################################
     # lpjg file: cflux_forest
     # lpjg: /// NBP (kgC/m2), equivalent to ForestPaths
@@ -1355,9 +1272,8 @@ for(management in managementslist){
     
     #soil moisture
     # to be provided in the next iteration.
-    # [TODO] turn on wcont_upper.out and wcont_lower.out
     ############################################################################
-    # LPJG files: wcont_lower.out, wcont_upper.out
+    # LPJG files: mwcont_lower.out, mwcont_upper.out
     # computing the weighted average of upper(50cm) soil layer and lower (100cm) soil layers,
     # averaged across all 12 months for an annual average.
     var = "SM"
@@ -1396,9 +1312,8 @@ for(management in managementslist){
     #############################################################################
     
     
-    #[TODO] prognostic disturbances need to be sanity-checked in future runs
+   
     # Wind-damage losses 
-    # seems very low
     #########################################################################
     var = "Wind_losses"
     unitss <- "kgC /a /m2"
