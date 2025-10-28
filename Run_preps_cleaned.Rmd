@@ -622,4 +622,78 @@ legend(legend=c("default ","increased probability", "decreased probability"),fil
 ```
 
 
+# Gridlist- country mapping.
+To avoid confusions when it comes to distribution of gridlists to European country names:
+
+
+```{create_country_gridlist}
+
+# Script to identify countries from latitude and longitude coordinates
+# Required packages
+if (!require("sf")) install.packages("sf")
+if (!require("rnaturalearth")) install.packages("rnaturalearth")
+if (!require("rnaturalearthdata")) install.packages("rnaturalearthdata")
+if (!require("dplyr")) install.packages("dplyr")
+
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(dplyr)
+
+# Function to identify countries from lat-lon coordinates
+add_country_names <- function(input_file) {
+  # Read your data file (assuming CSV format with headers)
+  # Adjust read.csv parameters based on your file format
+  cat("Reading input file:", input_file, "\n")
+  data <- read.table(input_file, stringsAsFactors = FALSE,head=FALSE)
+  names(data) <- c("lon","lat")
+  
+  # Get world country data
+  cat("Loading country boundary data...\n")
+  world <- ne_countries(scale = "medium", returnclass = "sf")
+  
+  # Convert the data frame to an sf object
+  cat("Processing coordinates...\n")
+  points_sf <- st_as_sf(data, coords =  c("lon", "lat"), crs = 4326)
+  
+  # Perform spatial join to identify which country each point falls in
+  cat("Matching coordinates to countries...\n")
+  result <- st_join(points_sf, world %>% select(name, iso_a2, continent))
+  
+  # Convert back to a regular data frame
+  result_df <- cbind(data, st_drop_geometry(result[, c("name", "iso_a2", "continent")]))
+  
+  # Rename columns to be more descriptive
+  names(result_df)[names(result_df) == "name"] <- "country_name"
+  names(result_df)[names(result_df) == "iso_a2"] <- "country_code"
+  
+  # Filter for European countries if needed
+  # Uncomment the next line if you only want European countries
+  # result_df <- result_df[result_df$continent == "Europe", ]
+  
+  # Write the result to a new CSV file
+  output_file = paste0(input_file,"_country_names_added")
+  cat("Writing output to:", output_file, "\n")
+  write.table(result_df, output_file, row.names = FALSE)
+  
+  cat("Process completed. Added country information to", nrow(data), "coordinates.\n")
+  cat("Points with identified countries:", sum(!is.na(result_df$country_name)), "\n")
+  cat("Points without matching countries:", sum(is.na(result_df$country_name)), "\n")
+  
+  return(result_df)
+}
+
+########################################################################
+##add gridlist files to which to add country names here:
+
+input_files <- c("../european_applications/testrun/gridlist_final.txt","../european_applications/testrun/gridlist_stratified.txt")
+
+# Run now:
+for (input_file in input_files){
+  add_country_names(input_file)
+}
+
+```
+
+
 
