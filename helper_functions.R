@@ -587,6 +587,7 @@ initialize_collection <- function(n_managements =length(managements_list), n_cou
 #' @param management Management scenario name
 #' @param scenario Climate scenario
 #' @param base_dir Base directory path
+BASE_DIR <- "/Volumes/Anne's Backup/v13/"
 get_folder_name <- function(management, scenario, base_dir = BASE_DIR) {
   time_period <- if (scenario == "hist") "hist" else "fut"
   paste0(base_dir, management, "_", time_period, "_MPI-ESM1-2-HR_", 
@@ -611,6 +612,9 @@ process_variable <- function(var_config) {
   for (country in country_list) {
     for (management in managements_list) {
       for (scenario in scenario_list) {
+        
+        scenario <<- scenario
+        OUTPUT_DIR <<- paste0("../Figures_and_reports/Figures_Policylab_v7_",scenario,"/")
         
         cat("Processing:", country, "-", management, "-", scenario, "\n")
         
@@ -644,7 +648,7 @@ create_country_plots <- function(data_list, plot_config) {
    #make plotting config backwards compatible. Need a cex setting to adjust 
    # for long variables/Titles.
    if(is.null(plot_config$cex)){
-    plot_config$cex=3
+    plot_config$cex = 2.5
   }
   
   pdf(
@@ -775,10 +779,50 @@ convert_units <- function(data_list, conversion_factor) {
 # ============================================================================
 
 #' Extract timber production data
-extract_timber_production <- function(source.in, country) {
+extract_timber_production_allC <- function(source.in, country) {
   
   # Read data
-  myData <- getField(source = source.in, quant = "cmass_wood_harv_sts")
+  myData <- getField(source = source.in, quant = "cmass_harv_killed_sts") #"cmass_wood_harv_sts
+  
+  # Apply rolling mean
+  myData@data[, Forest_roll := frollmean(
+     Forest_sum, n = 5, align = "left"
+   ), by = .(Lat, Lon)]
+  
+  # Merge with land cover
+  myData@data <- myData@data[
+    landcover_fractions_from_2025, 
+    on = .(Lon, Lat)
+  ]
+  
+  # Calculate areas
+  myData@data$GridcellArea_m2 <- GridcellArea_m2(myData@data$Lat, res = 0.5)
+  myData@data$Forest_area <- myData@data$GridcellArea_m2 * myData@data$FOREST
+  myData@data$Natural_area <- myData@data$GridcellArea_m2 * myData@data$NATURAL
+  myData@data$ForestNatural_area <- myData@data$Forest_area + myData@data$Natural_area
+  
+  # Extract country
+  myData_country <- extract_country(myData, input_name = country)
+  
+  # Calculate weighted mean
+  means_country <- myData_country@data[
+    !is.na(Forest_roll),
+    .(Total = sum(Forest_roll * Forest_area, na.rm = TRUE) / 
+        sum(ForestNatural_area, na.rm = TRUE)),
+    by = .(Year)
+  ]
+  
+  # Convert units: kgC/m2 to m3/ha
+  values <- means_country$Total / mean_wood_density * 10000
+  
+  list(values = values, years = means_country$Year)
+}
+
+#' Extract timber production data
+extract_timber_production_wood_C <- function(source.in, country) {
+  
+  # Read data
+  myData <- getField(source = source.in, quant = "cmass_wood_harv_sts") #"cmass_wood_harv_sts
   
   # Apply rolling mean
   myData@data[, Forest_roll := frollmean(
@@ -794,6 +838,8 @@ extract_timber_production <- function(source.in, country) {
   # Calculate areas
   myData@data$GridcellArea_m2 <- GridcellArea_m2(myData@data$Lat, res = 0.5)
   myData@data$Forest_area <- myData@data$GridcellArea_m2 * myData@data$FOREST
+  myData@data$Natural_area <- myData@data$GridcellArea_m2 * myData@data$NATURAL
+  myData@data$ForestNatural_area <- myData@data$Forest_area + myData@data$Natural_area
   
   # Extract country
   myData_country <- extract_country(myData, input_name = country)
@@ -802,7 +848,7 @@ extract_timber_production <- function(source.in, country) {
   means_country <- myData_country@data[
     !is.na(Forest_roll),
     .(Total = sum(Forest_roll * Forest_area, na.rm = TRUE) / 
-        sum(Forest_area, na.rm = TRUE)),
+        sum(ForestNatural_area, na.rm = TRUE)),
     by = .(Year)
   ]
   
@@ -843,6 +889,14 @@ extract_stand_biomass <- function(source.in, country) {
 }
 
 #' Extract deadwood data
+#' 
+folder_name <- get_folder_name("base", "ssp126")
+source.in <- defineSource(
+  id = paste0("base", "_", "ssp126"),
+  dir = folder_name,
+  format = GUESS,
+  name = paste0("base", "_", "ssp126")
+) 
 extract_deadwood <- function(source.in, country) {
   
   # Read coarse and fine litter
@@ -858,18 +912,40 @@ extract_deadwood <- function(source.in, country) {
   # Keep only Forest_sum
   myData@data <- myData@data[, .(Lon, Lat, Year, Forest_sum)]
   
-  # Convert units: kgC/m2 to m3/ha
-  myData@data$Forest_sum <- myData@data$Forest_sum / mean_wood_density * 10000
+  # Merge with land cover
+  myData@data <- myData@data[
+    landcover_fractions_from_2025,
+    on = .(Lon, Lat)
+  ]
+  
+  # Calculate areas
+  myData@data$GridcellArea_m2 <- GridcellArea_m2(myData@data$Lat, res = 0.5)
+  myData@data$Forest_area <- myData@data$GridcellArea_m2 * myData@data$FOREST
+  myData@data$Natural_area <- myData@data$GridcellArea_m2 * myData@data$NATURAL
+  myData@data$ForestNatural_area <- myData@data$Forest_area + myData@data$Natural_area
   
   # Extract country
   myData_country <- extract_country(myData, input_name = country)
   
-  # Calculate mean
+  # Calculate weighted mean
+  # Deadwood is at GRIDCELL level (kgC/m² of gridcell)
+  # Multiply by gridcell_area, divide by (FOREST + NATURAL) area
+ # means_country <- myData_country@data[
+  #  !is.na(Forest_sum) & !is.na(GridcellArea_m2) & !is.na(ForestNatural_area),
+   # .(Total = mean(Forest_sum )),#* GridcellArea_m2, na.rm = TRUE) / 
+  #      #sum(ForestNatural_area, na.rm = TRUE)),
+  #  by = .(Year)
+  #]
+  
   means_country <- myData_country@data[
-    !is.na(Forest_sum),
-    .(Total = mean(Forest_sum, na.rm = TRUE)),
+    !is.na(Forest_sum) & !is.na(GridcellArea_m2) & !is.na(ForestNatural_area),
+    .(Total = mean(Forest_sum, na.rm = TRUE)) ,#/ 
+    #sum(ForestNatural_area, na.rm = TRUE)),
     by = .(Year)
   ]
+  
+  # Convert units: kgC/m2 to m3/ha
+  means_country$Total <- means_country$Total #/ mean_wood_density * 10000
   
   list(values = means_country$Total, years = means_country$Year)
 }
@@ -944,15 +1020,21 @@ extract_natural_mortality <- function(source.in, country) {
   )
   myData_other@data$Forest_area <- myData_other@data$GridcellArea_m2 * 
     myData_other@data$FOREST
+  myData_other@data$Natural_area <- myData_other@data$GridcellArea_m2 * 
+    myData_other@data$NATURAL
+  myData_other@data$ForestNatural_area <- myData_other@data$Forest_area + 
+    myData_other@data$Natural_area
   
   # Extract country
   myData_country <- extract_country(myData_other, input_name = country)
   
   # Calculate weighted mean
+  # Natural mortality is at GRIDCELL level (kgC/m² of gridcell)
+  # Multiply by gridcell_area, divide by (FOREST + NATURAL) area
   means <- myData_country@data[
-    ,
-    .(weighted_Total = sum(Total * Forest_area, na.rm = TRUE) / 
-        sum(Forest_area, na.rm = TRUE)),
+    !is.na(Total) & !is.na(GridcellArea_m2) & !is.na(ForestNatural_area),
+    .(weighted_Total = sum(Total * GridcellArea_m2, na.rm = TRUE) / 
+        sum(ForestNatural_area, na.rm = TRUE)),
     by = .(Year)
   ]
   
@@ -974,15 +1056,19 @@ extract_nai <- function(source.in, country) {
   # Calculate areas
   myData@data$GridcellArea_m2 <- GridcellArea_m2(myData@data$Lat, res = 0.5)
   myData@data$Forest_area <- myData@data$GridcellArea_m2 * myData@data$FOREST
+  myData@data$Natural_area <- myData@data$GridcellArea_m2 * myData@data$NATURAL
+  myData@data$ForestNatural_area <- myData@data$Forest_area + myData@data$Natural_area
   
   # Extract country
   myData_country <- extract_country(myData, input_name = country)
   
   # Calculate weighted mean
+  # NAI is at GRIDCELL level (kgC/m² of gridcell)
+  # Multiply by gridcell_area, divide by (FOREST + NATURAL) area
   weighted_means <- myData_country@data[
-    !is.na(for_NAI) & !is.na(Forest_area),
-    .(weighted_NAI = sum(for_NAI * Forest_area, na.rm = TRUE) / 
-        sum(Forest_area, na.rm = TRUE)),
+    !is.na(for_NAI) & !is.na(GridcellArea_m2) & !is.na(ForestNatural_area),
+    .(weighted_NAI = sum(for_NAI * GridcellArea_m2, na.rm = TRUE) / 
+        sum(ForestNatural_area, na.rm = TRUE)),
     by = .(Year)
   ]
   
@@ -1005,15 +1091,19 @@ extract_nai_tot <- function(source.in, country) {
   # Calculate areas
   myData@data$GridcellArea_m2 <- GridcellArea_m2(myData@data$Lat, res = 0.5)
   myData@data$Forest_area <- myData@data$GridcellArea_m2 * myData@data$FOREST
+  myData@data$Natural_area <- myData@data$GridcellArea_m2 * myData@data$NATURAL
+  myData@data$ForestNatural_area <- myData@data$Forest_area + myData@data$Natural_area
   
   # Extract country
   myData_country <- extract_country(myData, input_name = country)
   
   # Calculate weighted mean
+  # tot_NAI is at GRIDCELL level (kgC/m² of gridcell)
+  # Multiply by gridcell_area, divide by (FOREST + NATURAL) area
   weighted_means <- myData_country@data[
-    !is.na(tot_NAI) & !is.na(Forest_area),
-    .(weighted_NAI = sum(tot_NAI * Forest_area, na.rm = TRUE) / 
-        sum(Forest_area, na.rm = TRUE)),
+    !is.na(tot_NAI) & !is.na(GridcellArea_m2) & !is.na(ForestNatural_area),
+    .(weighted_NAI = sum(tot_NAI * GridcellArea_m2, na.rm = TRUE) / 
+        sum(ForestNatural_area, na.rm = TRUE)),
     by = .(Year)
   ]
   
@@ -1039,15 +1129,17 @@ extract_gai <- function(source.in, country) {
   # Calculate areas
   myData@data$GridcellArea_m2 <- GridcellArea_m2(myData@data$Lat, res = 0.5)
   myData@data$Forest_area <- myData@data$GridcellArea_m2 * myData@data$FOREST
+  myData@data$Natural_area <- myData@data$GridcellArea_m2 * myData@data$NATURAL
+  myData@data$ForestNatural_area <- myData@data$Forest_area + myData@data$Natural_area
   
   # Extract country
   myData_country <- extract_country(myData, input_name = country)
   
-  # Calculate weighted mean
+  # Calculate weighted mean - GAI weighted by (FOREST + NATURAL)
   weighted_means <- myData_country@data[
-    !is.na(Total) & !is.na(Forest_area),
-    .(weighted_GAI = sum(Total * Forest_area, na.rm = TRUE) / 
-        sum(Forest_area, na.rm = TRUE)),
+    !is.na(Total) & !is.na(ForestNatural_area),
+    .(weighted_GAI = sum(Total * ForestNatural_area, na.rm = TRUE) / 
+        sum(ForestNatural_area, na.rm = TRUE)),
     by = .(Year)
   ]
   
@@ -1062,7 +1154,7 @@ extract_gai <- function(source.in, country) {
 #' Extract disturbance mortality data
 #' 
 #' This combines three sources of disturbance mortality:
-#' 1. Fire and other disturbances (closs_dist)
+#' 1. Fire and other disturbances (cflux, Fire)
 #' 2. Bark beetle damage (from storm output, InsDWC)
 #' 3. Wind damage (from storm output, DamWoodC)
 #' 
@@ -1076,17 +1168,43 @@ extract_disturbance_mortality <- function(source.in, country) {
   # -------------------------------------------------------------------------
   # 1. FIRE AND OTHER DISTURBANCES
   # -------------------------------------------------------------------------
-  # This gives total carbon lost to disturbances at gridcell level
-  myData_dist <- getField(source = source.in, quant = "closs_dist")
-  
-  # Sum across diameter classes to get total
-  myData_dist@data$Total <- rowSums(myData_dist@data[, 4:19], na.rm = TRUE)
-  
+  # This gives total carbon lost to fire at gridcell level
+  myData_fire <- getField(source = source.in, quant = "cflux")
+ 
+ 
   # Keep only essential columns
-  myData_dist@data <- myData_dist@data[, .(Lon, Lat, Year, Total)]
-  setnames(myData_dist@data, "Total", "Fire_Other")
+  myData_fire@data <- myData_fire@data[, .(Lon, Lat, Year, Fire)]
+  #setnames(myData_dist@data, "Total", "Fire_Other")
   
-  cat("    Fire/other disturbances: ", nrow(myData_dist@data), "rows\n")
+  # Merge with land cover to get forest area
+  myData_fire@data <- myData_fire@data[
+    landcover_fractions_from_2025, 
+    on = .(Lon, Lat)
+  ]
+  
+  # Calculate areas
+  myData_fire@data$GridcellArea_m2 <- GridcellArea_m2(myData_fire@data$Lat, res = 0.5)
+  myData_fire@data$Forest_area      <- myData_fire@data$GridcellArea_m2 * myData_fire@data$FOREST
+  myData_fire@data$Natural_area     <- myData_fire@data$GridcellArea_m2 * myData_fire@data$NATURAL
+  myData_fire@data$ForestNatural_area <- myData_fire@data$Forest_area + myData_fire@data$Natural_area
+  
+  # Scale fire from gridcell level to per (FOREST + NATURAL) area
+  # Fire_gridcell is kgC/m² of gridcell
+  # We want kgC/m² of (FOREST + NATURAL) area
+  # So: Fire_gridcell * GridcellArea_m2 / ForestNatural_area
+  #myData_fire@data$Fire <- myData_fire@data$Fire * 
+  #  myData_fire@data$GridcellArea_m2 / myData_fire@data$ForestNatural_area
+  myData_fire@data$Fire <- myData_fire@data$Fire / 
+    (myData_fire@data$FOREST + myData_fire@data$NATURAL)
+  
+  #some sanity checkings (uncomment for plotting:
+  #myData_dist <- getField(source = source.in, quant = "forest_cflux_veg")
+  var2_agg <- aggregateSpatial(myData_fire,method="mean")
+  #plotTemporal(var2_agg,layer=c("for_fireC","nat_fireC"))
+  plotTemporal(var2_agg,layer="Fire")
+  
+  
+  cat("    Fire/other disturbances: ", nrow(myData_fire@data), "rows\n")
   
   # -------------------------------------------------------------------------
   # 2. BARK BEETLE DAMAGE
@@ -1108,11 +1226,12 @@ extract_disturbance_mortality <- function(source.in, country) {
   )
   myData_insects@data$Forest_area <- myData_insects@data$GridcellArea_m2 * 
     myData_insects@data$FOREST
+  myData_insects@data$Natural_area <- myData_insects@data$GridcellArea_m2 * 
+    myData_insects@data$FOREST
   
-  # Convert from total C per gridcell to C per m2 of forest
-  # InsDWC is already scaled by forest area, but we need per m2
-  myData_insects@data$Insects <- myData_insects@data$InsDWC * 
-    myData_insects@data$Forest_area / myData_insects@data$GridcellArea_m2
+  # Convert from total C per gridcell to C per m2 of forest+natural
+  myData_insects@data$Insects <- myData_insects@data$InsDWC /
+    (myData_insects@data$FOREST + myData_insects@data$NATURAL)
   
   # Keep only essential columns
   myData_insects@data <- myData_insects@data[, .(Lon, Lat, Year, Insects)]
@@ -1122,8 +1241,9 @@ extract_disturbance_mortality <- function(source.in, country) {
   # -------------------------------------------------------------------------
   # 3. WIND DAMAGE
   # -------------------------------------------------------------------------
-  # DamWoodC is damaged wood at gridcell level
-  # It's already divided by forest fraction in the model output
+  # DamWoodC is damaged wood by wind 
+  # output from LPJG as:
+  # kgC/m² per unit area of (FOREST + NATURAL) land
   myData_wind <- getField(source = source.in, quant = "storm")
   
   # Merge with land cover
@@ -1132,10 +1252,9 @@ extract_disturbance_mortality <- function(source.in, country) {
     on = .(Lon, Lat)
   ]
   
-  # Wind losses need to be scaled back to gridcell area
-  # (they were divided by FOREST + NATURAL in the model)
-  myData_wind@data$Wind <- myData_wind@data$DamWoodC * 
-    (myData_wind@data$FOREST + myData_wind@data$NATURAL)
+  # No scaling needed, we are at FOREST+NATURAL area:
+  myData_wind@data$Wind <- myData_wind@data$DamWoodC #* 
+   # (myData_wind@data$FOREST + myData_wind@data$NATURAL)
   
   # Keep only essential columns
   myData_wind@data <- myData_wind@data[, .(Lon, Lat, Year, Wind)]
@@ -1164,7 +1283,7 @@ extract_disturbance_mortality <- function(source.in, country) {
   # Join fire/other
   merged_data <- merge(
     merged_data,
-    myData_dist@data,
+    myData_fire@data,
     by = join_keys,
     all = TRUE  # Full join
   )
@@ -1173,7 +1292,7 @@ extract_disturbance_mortality <- function(source.in, country) {
   # Check for missing data
   n_missing_wind <- sum(is.na(merged_data$Wind))
   n_missing_insects <- sum(is.na(merged_data$Insects))
-  n_missing_fire <- sum(is.na(merged_data$Fire_Other))
+  n_missing_fire <- sum(is.na(merged_data$Fire))
   
   if (n_missing_wind > 0) {
     warning("  ", n_missing_wind, " rows missing wind data")
@@ -1188,12 +1307,12 @@ extract_disturbance_mortality <- function(source.in, country) {
   # Replace NAs with 0 (assume no disturbance if missing)
   merged_data[is.na(Wind), Wind := 0]
   merged_data[is.na(Insects), Insects := 0]
-  merged_data[is.na(Fire_Other), Fire_Other := 0]
+  merged_data[is.na(Fire), Fire := 0]
   
   # Calculate total disturbance mortality
   merged_data$mort_dist <- merged_data$Wind + 
     merged_data$Insects + 
-    merged_data$Fire_Other
+    merged_data$Fire
   
   # -------------------------------------------------------------------------
   # 5. AGGREGATE TO COUNTRY LEVEL
@@ -1206,18 +1325,19 @@ extract_disturbance_mortality <- function(source.in, country) {
   
   merged_data$GridcellArea_m2 <- GridcellArea_m2(merged_data$Lat, res = 0.5)
   merged_data$Forest_area <- merged_data$GridcellArea_m2 * merged_data$FOREST
+  merged_data$Natural_area <- merged_data$GridcellArea_m2 * merged_data$NATURAL
   
   # Convert to DGVMTools format for country extraction
-  myData_dist@data <- merged_data
+  myData_wind@data <- merged_data
   
   # Extract country
-  myData_country <- extract_country(myData_dist, input_name = country)
+  myData_country <- extract_country(myData_wind, input_name = country)
   
   # Calculate area-weighted mean
   means <- myData_country@data[
     !is.na(mort_dist) & !is.na(Forest_area),
-    .(weighted_Total = sum(mort_dist * Forest_area, na.rm = TRUE) / 
-        sum(Forest_area, na.rm = TRUE)),
+    .(weighted_Total = sum(mort_dist * (Forest_area + Natural_area), na.rm = TRUE) / 
+        sum((Forest_area + Natural_area), na.rm = TRUE)),
     by = .(Year)
   ]
   
@@ -1237,7 +1357,7 @@ extract_disturbance_mortality <- function(source.in, country) {
       na.rm = TRUE
     )
     fire_contrib <- weighted.mean(
-      first_year_data$Fire_Other,
+      first_year_data$Fire,
       first_year_data$Forest_area,
       na.rm = TRUE
     )
@@ -1251,3 +1371,44 @@ extract_disturbance_mortality <- function(source.in, country) {
   
   list(values = means$weighted_Total, years = means$Year)
 }
+
+
+#' Apply rolling mean smoothing to collected data
+#' 
+#' @param data_list List of dataframes (one per country) with management columns and Year
+#' @param n Window size for rolling mean (default 5 years)
+#' @param align Alignment of window: "left", "center", or "right" (default "center")
+#' @return Smoothed data_list with same structure
+apply_rolling_mean <- function(data_list, n = 5, align = "right") {
+  
+  require(data.table)
+  
+  cat("Applying", n, "-year rolling mean (align =", align, ")...\n")
+  
+  smoothed_list <- lapply(names(data_list), function(country) {
+    
+    df <- data_list[[country]]
+    
+    # Get management columns (everything except Year)
+    mgmt_cols <- setdiff(names(df), "Year")
+    
+    # Convert to data.table for efficient operations
+    dt <- as.data.table(df)
+    
+    # Apply rolling mean to each management column
+    for (col in mgmt_cols) {
+      # frollmean from data.table is fast and handles NAs well
+      dt[[col]] <- frollmean(dt[[col]], n = n, align = align, na.rm = TRUE)
+    }
+    
+    # Convert back to data.frame
+    as.data.frame(dt)
+  })
+  
+  names(smoothed_list) <- names(data_list)
+  
+  cat("Smoothing complete\n")
+  
+  return(smoothed_list)
+}
+

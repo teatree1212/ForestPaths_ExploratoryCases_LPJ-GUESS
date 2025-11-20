@@ -18,7 +18,7 @@ source("helper_functions.R")
 # Configuration
 PLOT_ALL <- FALSE
 BASE_DIR <- "/Volumes/Anne's Backup/v13/"
-OUTPUT_DIR <- "../Figures_and_reports/Figures_Policylab_ssp126/"
+
 
 # ============================================================================
 # DEFINE MANAGEMENT SCENARIOS AND COUNTRIES
@@ -50,7 +50,7 @@ archetypes_df <- data.frame(
 country_list <- archetype_countries  # Replace with full list
 
 # Scenarios
-scenario_list <- c("ssp126")
+scenario_list <- c("ssp370")#,"ssp370")
 
 # ============================================================================
 # LOAD REFERENCE DATA
@@ -81,20 +81,20 @@ main <- function() {
   cat("ForestPaths Post-Processing Started\n")
   cat("====================================\n\n")
   
-  # 1. TIMBER PRODUCTION
+  # 1.a TIMBER PRODUCTION wood C
   timber_config <- list(
     name = "Timber Production",
-    extract_fn = extract_timber_production,
-    n_years = 73 # [TODO] crate on-the-fly n_years depedning on what extract_fn will extract..hack for now
+    extract_fn = extract_timber_production_wood_C,
+    n_years = 73
   )
-  timber_data <- process_variable(timber_config)
+  timber_data_wood <- process_variable(timber_config)
   
   # Plot in m3/ha/year
   create_country_plots(
-    timber_data,
+    timber_data_wood,
     list(
-      filename = "Timber_production_m3ha.pdf",
-      title = "timber production, m3/ha/year",
+      filename = "Timber_production_m3ha_cmass_wood_harv_sts.pdf",
+      title = "timber production, woodC, m3/ha/year",
       ylab = "timber production, m3/ha/year",
       ylim = c(0, 6),
       legend_position = "bottomleft",
@@ -102,27 +102,32 @@ main <- function() {
     )
   )
   
-  # Plot differences from baseline
-  timber_diff <- calculate_baseline_diff(timber_data)
+  if(scenario == "ssp370"){
+    ylim =  c(-1, 1)
+  }else{
+    ylim =  c(-1.5, 1.5)
+  }
+  # Plot differences from baseline (m3/ha)
+  timber_wood_diff_m3 <- calculate_baseline_diff(timber_data_wood)
   create_country_plots(
-    timber_diff,
+    timber_wood_diff_m3,
     list(
-      filename = "Timber_production_m3ha_diff.pdf",
-      title = expression(Delta ~ "timber production, m3/ha/year"),
+      filename = "Timber_production_m3ha_diff_cmass_wood_harv_sts.pdf",
+      title = expression(Delta ~ "timber production, woodC, m3/ha/year"),
       ylab = expression(Delta ~ "timber production, m3/ha/year"),
-      ylim = c(-1.5, 1.5),
+      ylim = ylim,
       legend_position = "bottomleft",
       legend_country = "Poland"
     )
   )
   
   # Convert to kgC/m2/year and plot
-  timber_kgC <- convert_units(timber_data, mean_wood_density / 10000)
+  timber_wood_kgC <- convert_units(timber_data_wood, mean_wood_density / 10000)
   create_country_plots(
-    timber_kgC,
+    timber_wood_kgC,
     list(
-      filename = "Timber_production_kgCm2year.pdf",
-      title = "timber production, kgC/m2/year",
+      filename = "Timber_production_kgCm2year_cmass_wood_harv_sts.pdf",
+      title = "timber production, woodC, kgC/m2/year",
       ylab = "timber production, kgC/m2/year",
       ylim = c(0, 0.25),
       legend_position = "bottomleft",
@@ -130,19 +135,114 @@ main <- function() {
     )
   )
   
-  # Plot differences from baseline, in kgCm2year
-  timber_diff <- calculate_baseline_diff(timber_kgC)
+  if(scenario == "ssp370"){
+    ylim = c(-0.03, 0.03)
+  }else{
+    ylim = c(-0.05, 0.05)
+  }
+  # Plot differences from baseline (kgC/m2/year)
+  timber_wood_diff_kgC <- calculate_baseline_diff(timber_wood_kgC)
   create_country_plots(
-    timber_diff,
+    timber_wood_diff_kgC,
     list(
-      filename = "Timber_production_kgCm2year_diff.pdf",
-      title = expression(Delta ~ "timber production, kgC/m2/year"),
+      filename = "Timber_production_kgCm2year_diff_cmass_wood_harv_sts.pdf",
+      title = expression(Delta ~ "timber production, woodC, kgC/m2/year"),
       ylab = expression(Delta ~ "timber production, kgC/m2/year"),
-      ylim = c(-0.05, 0.05),
+      ylim = ylim,
       legend_position = "bottomleft",
       legend_country = "Poland"
     )
   )
+  
+  # 1.b TIMBER PRODUCTION all C
+  timber_config_allC <- list(
+    name = "Timber Production",
+    extract_fn = extract_timber_production_allC,
+    n_years = 73
+  )
+  timber_data_allC <- process_variable(timber_config_allC)
+  
+  
+  if(scenario == "ssp370"){
+    ylim = c(0, 10)
+  }else{
+    ylim = c(0, 20)
+  }
+  
+  # Plot in m3/ha/year
+  create_country_plots(
+    timber_data_allC,
+    list(
+      filename = "Timber_production_m3ha_cmass_harv_killed_sts.pdf",
+      title = "timber production, totC, m3/ha/year",
+      ylab = "timber production, m3/ha/year",
+      ylim = ylim,
+      legend_position = "bottomleft",
+      legend_country = "Poland"
+    )
+  )
+  
+  if(scenario == "ssp370"){
+    ylim =   c(-2, 2)
+  }else{
+    ylim =   c(-4.5, 4.5)
+  }
+  # Plot differences from baseline (m3/ha)
+  timber_allC_diff_m3 <- calculate_baseline_diff(timber_data_allC)
+  create_country_plots(
+    timber_allC_diff_m3,
+    list(
+      filename = "Timber_production_m3ha_diff_cmass_harv_killed_sts.pdf",
+      title = expression(Delta ~ "timber production, totC, m3/ha/year"),
+      ylab = expression(Delta ~ "timber production, m3/ha/year"),
+      ylim = ylim,
+      legend_position = "bottomleft",
+      legend_country = "Spain"
+    )
+  )
+  
+  
+  if(scenario == "ssp370"){
+    ylim =  c(0, 0.3)
+  }else{
+    ylim =  c(0, 0.55)
+  }
+  
+  # Convert to kgC/m2/year and plot
+  timber_allC_kgC <- convert_units(timber_data_allC, mean_wood_density / 10000)
+  create_country_plots(
+    timber_allC_kgC,
+    list(
+      filename = "Timber_production_kgCm2year_cmass_harv_killed_sts.pdf",
+      title = "timber production, totC, kgC/m2/year",
+      ylab = "timber production, kgC/m2/year",
+      ylim = ylim,
+      legend_position = "bottomleft",
+      legend_country = "Poland"
+    )
+  )
+  
+  
+  if(scenario == "ssp370"){
+    ylim = c(-0.1, 0.1)
+  }else{
+    ylim =  c(-0.4, 0.4)
+  }
+  
+  # Plot differences from baseline (kgC/m2/year)
+  timber_allC_diff_kgC <- calculate_baseline_diff(timber_allC_kgC)
+  create_country_plots(
+    timber_allC_diff_kgC,
+    list(
+      filename = "Timber_production_kgCm2year_diff_cmass_harv_killed_sts.pdf",
+      title = expression(Delta ~ "timber production, totC, kgC/m2/year"),
+      ylab = expression(Delta ~ "timber production, kgC/m2/year"),
+      ylim = ylim,
+      legend_position = "bottomleft",
+      legend_country = "Poland"
+    )
+  )
+  
   
   # 2. STAND BIOMASS
   stand_config <- list(
@@ -185,41 +285,16 @@ main <- function() {
   )
   deadwood_data <- process_variable(deadwood_config)
   
-  create_country_plots(
-    deadwood_data,
-    list(
-      filename = "Deadwood_m3ha.pdf",
-      title = "Deadwood pool, m3/ha",
-      ylab = "Deadwood pool, m3/ha",
-      ylim = c(40, 210),
-      legend_position = "bottomleft",
-      legend_country = "Poland"
-    )
-  )
-  
-  deadwood_diff <- calculate_baseline_diff(deadwood_data)
-  create_country_plots(
-    deadwood_diff,
-    list(
-      filename = "Deadwood_m3ha_diff.pdf",
-      title = expression(Delta ~ "Deadwood pool, m3/ha"),
-      ylab = expression(Delta ~ "Deadwood pool, m3/ha"),
-      ylim = c(-10, 10),
-      legend_position = "bottomleft",
-      legend_country = "Poland"
-    )
-  )
-  
+ 
   #conversion to kgC/m2 
   #[TODO] check conversion was correct:
-  deadwood_data_kgC <- convert_units(deadwood_data, mean_wood_density / 10000)
   create_country_plots(
-    deadwood_data_kgC,
+    deadwood_data,
     list(
       filename = "Deadwood_kgCm2.pdf",
       title = "Deadwood pool, kgC/m2",
       ylab = "Deadwood pool,kgC/m2",
-      ylim = c(0, 7),
+      ylim = c(0, 6.2),
       legend_position = "bottomleft",
       legend_country = "Poland"
     )
@@ -227,14 +302,41 @@ main <- function() {
   
   
   #difference plot for deadwood in kgC
-  deadwood_kg_diff <- calculate_baseline_diff(deadwood_data_kgC)
+  deadwood_kg_diff <- calculate_baseline_diff(deadwood_data)
   create_country_plots(
     deadwood_kg_diff,
     list(
       filename = "Deadwood_kgCm2_diff.pdf",
       title = expression(Delta ~"Deadwood pool, kgC/m2"),
       ylab = expression(Delta ~"Deadwood pool,kgC/m2"),
-      ylim = c(-0.4, 0.4),
+      ylim = c(-0.5, 0.5),
+      legend_position = "bottomleft",
+      legend_country = "Poland"
+    )
+  )
+  
+  deadwood_data_m3ha <- convert_units(deadwood_data, 1/(0.5 * mean_wood_density) * 10000 )
+  ### conversion to m3/ha
+  create_country_plots(
+    deadwood_data_m3ha,
+    list(
+      filename = "Deadwood_m3ha.pdf",
+      title = "Deadwood pool, m3/ha",
+      ylab = "Deadwood pool, m3/ha",
+      ylim = c(40, 420),
+      legend_position = "bottomleft",
+      legend_country = "Poland"
+    )
+  )
+  
+  deadwood_diff <- calculate_baseline_diff(deadwood_data_m3ha)
+  create_country_plots(
+    deadwood_diff,
+    list(
+      filename = "Deadwood_m3ha_diff.pdf",
+      title = expression(Delta ~ "Deadwood pool, m3/ha"),
+      ylab = expression(Delta ~ "Deadwood pool, m3/ha"),
+      ylim = c(-20, 20),
       legend_position = "bottomleft",
       legend_country = "Poland"
     )
@@ -268,8 +370,19 @@ main <- function() {
   )
   mortality_data <- process_variable(mortality_config)
   
+  
+  #running mean:
+  mortality_data_smoothed <- apply_rolling_mean(mortality_data,n = 5)
+  
+  
+  if(scenario == "ssp370"){
+    ylim = c(0, 0.2)
+  }else{
+    ylim = c(0, 0.15)
+  }
+  
   create_country_plots(
-    mortality_data,
+    mortality_data_smoothed,
     list(
       filename = "mortality_natural_kgCm2year.pdf",
       title = "Carbon lost through natural mortality, kgC/m2/year",
@@ -280,6 +393,8 @@ main <- function() {
       cex=1.7
     )
   )
+  
+  #running mean:
   
   # Calculate mortality as percentage of stand biomass
   mortality_pct <- lapply(names(stand_data), function(country) {
@@ -292,8 +407,9 @@ main <- function() {
   })
   names(mortality_pct) <- names(stand_data)
   
+  mortality_pct_smoothed <- apply_rolling_mean(mortality_pct,n = 5)
   create_country_plots(
-    mortality_pct,
+    mortality_pct_smoothed,
     list(
       filename = "mortality_natural_percyear.pdf",
       title = "Natural mortality rate %/year",
@@ -308,8 +424,9 @@ main <- function() {
   # calculate difference( in natural mortality rate (%)
   #[TOASK] [?] create smoothing for difference plots?
   mortality_pct_diff <- calculate_baseline_diff(mortality_pct)
+  mortality_pct_diff_smoothed <- apply_rolling_mean(mortality_pct_diff,n = 5)
   create_country_plots(
-    mortality_pct_diff,
+    mortality_pct_diff_smoothed,
     list(
       filename = "mortality_natural_percyear_diff.pdf",
       title = expression(Delta ~"Natural mortality rate %/year"),
@@ -329,13 +446,20 @@ main <- function() {
   )
   nai_data <- process_variable(nai_config)
   
+  
+  if(scenario == "ssp370"){
+    ylim = c(-0.2, 0.4)
+  }else{
+    ylim = c(-0.1, 0.4)
+  }
+  
   create_country_plots(
     nai_data,
     list(
       filename = "NAI_kgCyear.pdf",
       title = "NAI, kgC/m2/year",
       ylab = "NAI, kgC/m2/year",
-      ylim = c(-0.1, 0.2),
+      ylim = ylim,
       legend_position = "bottomright",
       legend_country = "Spain"
     )
@@ -353,6 +477,13 @@ main <- function() {
       legend_country = "Poland"
     )
   )
+  
+  if(scenario == "ssp370"){
+    ylim = c(-6, 16)
+  }else{
+    ylim = c(-5, 15)
+  }
+  
   # Convert to m3/ha/year
   nai_m3 <- convert_units(nai_data, 10000 / (0.5 * mean_wood_density))
   create_country_plots(
@@ -361,13 +492,22 @@ main <- function() {
       filename = "NAI_m3hayr.pdf",
       title = "NAI, m3/ha/year",
       ylab = "NAI, m3/ha/year",
-      ylim = c(-5, 15),
+      ylim = ylim,
       legend_position = "bottomright",
       legend_country = "Poland"
     )
   )
   
-  #calculate NAI perc difference
+  
+  if(scenario == "ssp370"){
+    legend_position = "bottomleft"
+    ylim = c(-2.3, 2.3)
+  }else{
+    legend_position = "bottomright"
+    ylim = c(-2, 2)
+  }
+  
+  #calculate NAI difference
   nai_m3_diff <- calculate_baseline_diff(nai_m3)
   create_country_plots(
     nai_m3_diff,
@@ -375,8 +515,8 @@ main <- function() {
       filename = "NAI_m3hayr_diff.pdf",
       title = expression(Delta~"NAI, m3/ha/year"),
       ylab = expression(Delta~"NAI, m3/ha/year"),
-      ylim = c(-2, 2),
-      legend_position = "bottomright",
+      ylim = ylim,
+      legend_position = legend_position,
       legend_country = "Poland"
     )
   )
@@ -389,15 +529,22 @@ main <- function() {
   )
   nai_tot_data <- process_variable(nai_config)
   
+  
+  if(scenario == "ssp370"){
+    ylim = c(-0.2, 0.3)
+  }else{
+    ylim = c(-0.1, 0.2)
+  }
+  
   create_country_plots(
     nai_tot_data,
     list(
       filename = "NAI_tot_kgCyear.pdf",
       title = "NAI, kgC/m2/year",
-      ylab = "NAI, kgC/m2/year",
-      ylim = c(-0.1, 0.2),
+      ylab  = "NAI, kgC/m2/year",
+      ylim  = ylim,
       legend_position = "bottomright",
-      legend_country = "Spain"
+      legend_country  = "Spain"
     )
   )
   
@@ -415,6 +562,13 @@ main <- function() {
     )
   )
   
+  
+  if(scenario == "ssp370"){
+    ylim = c(-10, 20)
+  }else{
+    ylim =  c(-5, 15)
+  }
+  
   # Convert to m3/ha/year
   nai_m3 <- convert_units(nai_tot_data, 10000 / (0.5 * mean_wood_density))
   create_country_plots(
@@ -423,12 +577,18 @@ main <- function() {
       filename = "NAI_tot_m3hayr.pdf",
       title = "NAI, m3/ha/year",
       ylab = "NAI, m3/ha/year",
-      ylim = c(-5, 15),
+      ylim = ylim,
       legend_position = "bottomright",
       legend_country = "Poland"
     )
   )
   
+  
+  if(scenario == "ssp370"){
+    ylim =  c(-2.7, 2.7) 
+  }else{
+    ylim =  c(-2.5, 2.5)
+  }
   # NAI_tot difference pot in m3/ha/year
   nai_m3_diff <- calculate_baseline_diff(nai_m3)
   create_country_plots(
@@ -437,7 +597,7 @@ main <- function() {
       filename = "NAI_tot_m3hayr_diff.pdf",
       title = expression(Delta~"NAI, m3/ha/year"),
       ylab = expression(Delta~"NAI, m3/ha/year"),
-      ylim = c(-2.5, 2.5),
+      ylim = ylim,
       legend_position = "bottomleft",
       legend_country = "Germany"
     )
@@ -464,7 +624,7 @@ main <- function() {
       legend_country = "Poland"
     )
   )
-  # NAI_tot difference pot in m3/ha/year
+  # GAI_tot difference pot in m3/ha/year
   gai_data_diff <- calculate_baseline_diff(gai_data)
   create_country_plots(
     gai_data_diff,
@@ -513,9 +673,12 @@ main <- function() {
   )
   disturbance_mortality_data <- process_variable(disturbance_mortality_config)
   
+  
+  # apply running mean before plotting:
+  disturbance_mortality_data_smoothed <- apply_rolling_mean(disturbance_mortality_data,n = 5)
   # Plot absolute values
   create_country_plots(
-    disturbance_mortality_data,
+    disturbance_mortality_data_smoothed,
     list(
       filename = "mortality_disturbance_kgCm2year.pdf",
       title = "Carbon lost through disturbance mortality, kgC/m2/year",
@@ -527,6 +690,7 @@ main <- function() {
     )
   )
   
+  # apply running mean before plotting:
   # Calculate as percentage of stand biomass
   disturbance_mortality_pct <- lapply(names(stand_data), function(country) {
     dfB <- stand_data[[country]]
@@ -538,38 +702,47 @@ main <- function() {
   })
   names(disturbance_mortality_pct) <- names(stand_data)
   
+  
+  # apply running mean before plotting:
+  disturbance_mortality_pct_smoothed <- apply_rolling_mean(disturbance_mortality_pct,n = 5)
   create_country_plots(
-    disturbance_mortality_pct,
+    disturbance_mortality_pct_smoothed,
     list(
       filename = "mortality_disturbance_percyear.pdf",
       title = "Disturbance mortality rate, %/year",
       ylab = "Disturbance mortality rate, %/year",
-      ylim = c(0, 0.4),
+      ylim = c(0, 0.5),
       legend_position = "bottomright",
       legend_country = "Sweden",
       cex = 1.7
     )
   )
   
+
   # Plot differences from baseline (percentage)
   disturbance_mortality_pct_diff <- calculate_baseline_diff(disturbance_mortality_pct)
+  # apply running mean before plotting:
+  disturbance_mortality_pct_diff_smoothed <- apply_rolling_mean(disturbance_mortality_pct_diff,n = 5)
   create_country_plots(
-    disturbance_mortality_pct_diff,
+    disturbance_mortality_pct_diff_smoothed,
     list(
       filename = "mortality_disturbance_percyear_diff.pdf",
       title = expression(Delta ~ "Disturbance mortality rate, %/year"),
       ylab = expression(Delta ~ "Disturbance mortality rate, %/year"),
-      ylim = c(-0.2, 0.2),
+      ylim = c(-0.1, 0.1),
       legend_position = "bottom",
       legend_country = "Spain",
       cex = 1.7
     )
   )
   
+  
   # Plot differences from baseline (absolute)
   disturbance_mortality_diff <- calculate_baseline_diff(disturbance_mortality_data)
+  # apply running mean before plotting:
+  disturbance_mortality_pct_diff_smoothed <- apply_rolling_mean(disturbance_mortality_diff,n = 5)
   create_country_plots(
-    disturbance_mortality_diff,
+    disturbance_mortality_pct_diff_smoothed,
     list(
       filename = "mortality_disturbance_kgCm2year_diff.pdf",
       title = expression(Delta ~ "Carbon lost through disturbance mortality, kgC/m2/year"),
