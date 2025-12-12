@@ -21,14 +21,14 @@ library(tidyr)
 library(tidyverse)
 library(reldist)
 
-source("..helper_functions.R")
+source("helper_functions.R")
 
 # we use management names, and ForestPaths uses cases ( numbers). here I can quickly map one to the other:
 # from Table 2b in Exploratory Cases M7.
 # 999 means these are not actually part of ForestPaths
-cases=data.frame( man=c("base","lightthin", "intensthin","longrot", "shortrot", "rettree", "fertfor","ceaseman", "sfire"), #,"ccf"
-                  FPcase = c(0  ,       6,          7   , 8      ,      9    ,    10    ,     12   ,    14     , 11) )# , 999
-
+cases=data.frame( man=c("base","lightthin", "intensthin","longrot", "shortrot", "rettree", "fertfor","ceaseman", "sfire","ccf"),
+                  FPcase = c(0  ,       6,          7   , 8      ,      9    ,    10    ,     12   ,    14     , 11,       4) )# , 999
+  #                          x           x           x       x           x        (x)          x         x         x         x              
 
 #also create the correct expression for Scenario:
 scenarios = data.frame(sc   = c("hist","ssp126","ssp370"),
@@ -212,14 +212,14 @@ create_Forest_Paths_table <- function(myData_in, var, unitss,NATURAL = NULL){
 # file and case preparations: 
 
 base_dir <- "/Volumes/Anne's Backup/v13/"  #"/Volumes/Anne's Passport/ForestPaths/sims/sims_backup/simsv8/" 
-processed_folder <- "/Volumes/Anne's Backup/processed/v13" # "/Volumes/Anne's Passport/ForestPaths/processed/v9/"
+processed_folder <- "/Volumes/Anne's Backup/processed/v13.1/" # "/Volumes/Anne's Passport/ForestPaths/processed/v9/"
 #"base","shortrot",
-managementslist <- c("shortrot")#fertfor","rettree","fertfor","rettree","base")# "ceaseman""sfire","","ccf")
+managementslist <- c("rettree")#c("intensthin,"shortrot","longrot","lightthin", "intensthin", "fertfor","base","ceaseman","sfire","ccf") #"rettree",
 #Volumes/My\ Passport/ForestPaths/sims #"lightthin", "intensthin","longrot", "shortrot",
 # don't forget: shortrot ssp370
 #management = "ceaseman"
 #scenario ="ssp126"
-scenariolist <- c("ssp370")#"ssp126"
+scenariolist <- c("ssp126")#,"ssp126")#ssp370
 for(management in managementslist){
   for(scenario in scenariolist){
     
@@ -239,7 +239,7 @@ for(management in managementslist){
     }
     
     lss <- dir(folder_name)
-    if(!("cmass_active.out.gz" %in% lss)) {
+    if(!any(c("cmass_active.out", "cmass_active.out.gz") %in% lss)) {
       cat(paste(folder_name,"has no content,skipping"))
       next  # Skip to the next iteration if folder does not contain files
      
@@ -378,36 +378,64 @@ for(management in managementslist){
     #myData_placeholder@data$forest <- NA
     names(myData_placeholder@data)[4:12] <- standtypes
     
-    # Vector of columns to pivot (all DBH classes)
-    dbh_cols <- c("0_5", "5_10", "10_15", "15_20", "20_25", "25_30", "30_35", 
-                  "35_40", "40_45", "45_50", "50_55", "55_60", "60_65", "65_70", "70_75",  "75_80" ,  "80_85" ,  "85_90" ,  "90_95"  , "95_100",  "100_105", "105_110" ,"110_115", "115_120" ,"120_125", "125_130", "130_135", "135_140", "140_145", "145_150" ,"gt150" )
-    
-    dbh_mids <- c(
-      "0_5" = 2.5, "5_10" = 7.5, "10_15" = 12.5, "15_20" = 17.5,
-      "20_25" = 22.5, "25_30" = 27.5, "30_35" = 32.5, "35_40" = 37.5,
-      "40_45" = 42.5, "45_50" = 47.5, "50_55" = 52.5, "55_60" = 57.5,
-      "60_65" = 62.5, "65_70" = 67.5, "70_75" = 72.5, "75_80" = 77.5,
-      "80_85" = 82.5, "85_90" = 87.5, "90_95" = 92.5, "95_100" = 97.5,
-      "100_105" = 102.5, "105_110" = 107.5, "110_115" = 112.5, "115_120" = 117.5,
-      "120_125" = 122.5, "125_130" = 127.5, "130_135" = 132.5, "135_140" = 137.5,
-      "140_145" = 142.5, "145_150" = 147.5, "gt150" = 152.5
-    )
+    if(management =="rettree"){
+      #run with an older version, where the retention tree code worked. but this means that some of the output columns have different names. Once I have checked what the matter is with why rettree does not work anymore after the EUroapp merge, I will remove this
+      # Vector of columns to pivot (all DBH classes)
+      dbh_cols <- c("0_5", "5_10", "10_15", "15_20", "20_25", "25_30", "30_35", 
+                    "35_40", "40_45", "45_50", "50_55", "55_60", "60_65", "65_70", "70_75",  "75_80" ,  "80_85" ,  "85_90" ,  "90_95"  , "95_100",  "100_105", "105_110" ,"110_115", "115_120" ,"120_125", "125_130", "130_135", "135_140", "140_145", "145_150" ,">150" )
+      
+      dbh_mids <- c(
+        "0_5" = 2.5, "5_10" = 7.5, "10_15" = 12.5, "15_20" = 17.5,
+        "20_25" = 22.5, "25_30" = 27.5, "30_35" = 32.5, "35_40" = 37.5,
+        "40_45" = 42.5, "45_50" = 47.5, "50_55" = 52.5, "55_60" = 57.5,
+        "60_65" = 62.5, "65_70" = 67.5, "70_75" = 72.5, "75_80" = 77.5,
+        "80_85" = 82.5, "85_90" = 87.5, "90_95" = 92.5, "95_100" = 97.5,
+        "100_105" = 102.5, "105_110" = 107.5, "110_115" = 112.5, "115_120" = 117.5,
+        "120_125" = 122.5, "125_130" = 127.5, "130_135" = 132.5, "135_140" = 137.5,
+        "140_145" = 142.5, "145_150" = 147.5, ">150" = 152.5
+      )
+    }else{
+      # Vector of columns to pivot (all DBH classes)
+      dbh_cols <- c("0_5", "5_10", "10_15", "15_20", "20_25", "25_30", "30_35", 
+                    "35_40", "40_45", "45_50", "50_55", "55_60", "60_65", "65_70", "70_75",  "75_80" ,  "80_85" ,  "85_90" ,  "90_95"  , "95_100",  "100_105", "105_110" ,"110_115", "115_120" ,"120_125", "125_130", "130_135", "135_140", "140_145", "145_150" ,"gt150" )
+      
+      dbh_mids <- c(
+        "0_5" = 2.5, "5_10" = 7.5, "10_15" = 12.5, "15_20" = 17.5,
+        "20_25" = 22.5, "25_30" = 27.5, "30_35" = 32.5, "35_40" = 37.5,
+        "40_45" = 42.5, "45_50" = 47.5, "50_55" = 52.5, "55_60" = 57.5,
+        "60_65" = 62.5, "65_70" = 67.5, "70_75" = 72.5, "75_80" = 77.5,
+        "80_85" = 82.5, "85_90" = 87.5, "90_95" = 92.5, "95_100" = 97.5,
+        "100_105" = 102.5, "105_110" = 107.5, "110_115" = 112.5, "115_120" = 117.5,
+        "120_125" = 122.5, "125_130" = 127.5, "130_135" = 132.5, "135_140" = 137.5,
+        "140_145" = 142.5, "145_150" = 147.5, "gt150" = 152.5
+      )
+    }
     for(stand_type in standtypes){
       #address input file differences for total forest and stand types
       if(stand_type=="forest"){
         file = paste0("diamstruct_cmass_wood_",stand_type)
       }else{
-        file = paste0("diamstruct_cmass_wood_",stand_type,"_st")
+        file = paste0("diamstruct_cmass_wood_",stand_type,"_st") #diamstruct_cmass_wood_otherBL_st
       }
       
       #read in output:
       myData <- getField(source = source.in, quant = file)
+      colnamess <- colnames(myData@data)
+      if(">150" %in% colnamess){
+        # Pivot from wide to long format
+        dt_long <- myData@data %>%
+          pivot_longer(cols = `0_5`:`>150`,
+                       names_to = "dbh_class",
+                       values_to = "cmass_dbh_weight")
+        
+      }else{
+        # Pivot from wide to long format
+        dt_long <- myData@data %>%
+          pivot_longer(cols = `0_5`:`gt150`,
+                       names_to = "dbh_class",
+                       values_to = "cmass_dbh_weight")
+      }
       
-      # Pivot from wide to long format
-      dt_long <- myData@data %>%
-        pivot_longer(cols = `0_5`:`gt150`,
-                     names_to = "dbh_class",
-                     values_to = "cmass_dbh_weight")
       
       # Add midpoint column
       dt_long <- dt_long %>%
@@ -504,9 +532,16 @@ for(management in managementslist){
     myData <- getField(source = source.in,quant="diamstruct_forest")
     
     # Define the column names that are involved in counting as veteran trees: 
-    vet_trees_40    <- c(   "40_45"  , "45_50" ,  "50_55",   "55_60"  , "60_65" ,  "65_70" ,  "70_75" ,  "75_80"  ,
-                            "80_85" ,  "85_90" ,  "90_95" ,  "95_100" , "100_105", "105_110", "110_115" ,"115_120", "120_125", "125_130" ,"130_135" ,"135_140", "140_145", "145_150", "gt150" )
-    
+    if(management =="rettree"){
+      #run with an older version, where the retention tree code worked. but this means that some of the output columns have different names. Once I have checked what the matter is with why rettree does not work anymore after the EUroapp merge, I will remove this
+      vet_trees_40    <- c(   "40_45"  , "45_50" ,  "50_55",   "55_60"  , "60_65" ,  "65_70" ,  "70_75" ,  "75_80"  ,
+                              "80_85" ,  "85_90" ,  "90_95" ,  "95_100" , "100_105", "105_110", "110_115" ,"115_120", "120_125", "125_130" ,"130_135" ,"135_140", "140_145", "145_150", ">150" )
+      
+    }else{
+      vet_trees_40    <- c(   "40_45"  , "45_50" ,  "50_55",   "55_60"  , "60_65" ,  "65_70" ,  "70_75" ,  "75_80"  ,
+                              "80_85" ,  "85_90" ,  "90_95" ,  "95_100" , "100_105", "105_110", "110_115" ,"115_120", "120_125", "125_130" ,"130_135" ,"135_140", "140_145", "145_150", "gt150" )
+      
+    }
     
     # Veteran_trees_40:
     myData@data$Veteran_trees_40   <- rowSums(myData@data[,..vet_trees_40]) /10000
@@ -546,10 +581,20 @@ for(management in managementslist){
     myData <- getField(source = source.in,quant="diamstruct_forest")
     
     # Define the column names that are involved in counting as veteran trees: 
-    vet_trees_50<- c( "50_55",   "55_60"  , "60_65" ,  "65_70" ,  "70_75" ,  "75_80"  ,
-                      "80_85" ,  "85_90" ,  "90_95" ,  "95_100" , "100_105", "105_110", "110_115" ,"115_120", "120_125", "125_130" ,"130_135" ,"135_140", "140_145", "145_150", "gt150" )
+    if(management =="rettree"){
+      #run with an older version, where the retention tree code worked. but this means that some of the output columns have different names. Once I have checked what the matter is with why rettree does not work anymore after the EUroapp merge, I will remove this
+      # Define the column names that are involved in counting as veteran trees: 
+      vet_trees_50<- c( "50_55",   "55_60"  , "60_65" ,  "65_70" ,  "70_75" ,  "75_80"  ,
+                        "80_85" ,  "85_90" ,  "90_95" ,  "95_100" , "100_105", "105_110", "110_115" ,"115_120", "120_125", "125_130" ,"130_135" ,"135_140", "140_145", "145_150", ">150" )
+      
+    }else{
+      
+      vet_trees_50<- c( "50_55",   "55_60"  , "60_65" ,  "65_70" ,  "70_75" ,  "75_80"  ,
+                        "80_85" ,  "85_90" ,  "90_95" ,  "95_100" , "100_105", "105_110", "110_115" ,"115_120", "120_125", "125_130" ,"130_135" ,"135_140", "140_145", "145_150", "gt150" )
+      
+    }
     
-    # Veteran_trees_40:
+    # Veteran_trees_50:
     myData@data$Veteran_trees_50   <- rowSums(myData@data[,..vet_trees_50]) /10000
     
     #reorganise into ForestPaths format:
@@ -649,8 +694,6 @@ for(management in managementslist){
     ############################################################
     
     # Soil carbon stock
-    # DO NOT SEND - set to NA for writing out
-    # could I do a csoil_sts_natural ? 
     #############################################################
     # LPJG-File: csoil_sts
     # Soil carbon stock
@@ -660,16 +703,16 @@ for(management in managementslist){
     cat(var)
     
     # read in output:
-    #myData <- getField(source = source.in,quant="csoil_sts") 
+    myData <- getField(source = source.in,quant="csoil_sts") 
     
     # simply "rename" column:
-    #myData@data$Soil_C  <- myData@data$Forest_sum
+    myData@data$Soil_C  <- myData@data$Forest_sum
     # unitconversion
     # csoil is already in kgC/m2
     
     #TOCHANGE: currently placeholder variable for constructing the final output file
-    myData  <- getField(source = source.in,quant = "cmass_active") 
-    myData@data$Soil_C <- NA
+    #myData  <- getField(source = source.in,quant = "cmass_active") 
+    #myData@data$Soil_C <- NA
     
     #first visualisations for output:
     if(plotall){
@@ -916,22 +959,23 @@ for(management in managementslist){
     #read in output:
     #clitter_course_sts.out.gz
     clitter_coarse <- getField(source = source.in,quant = "clitter_course_sts")  #heartwood
-    clitter_fine <- getField(source = source.in,quant = "clitter_fine_sts")    #sapwood  # per unit stand area
+    clitter_fine   <- getField(source = source.in,quant = "clitter_fine_sts")    #sapwood  # per unit stand area
     #myData <- getField(source = source.in,quant = "clitter_sts") 
     
     myData <- clitter_fine
     cols <- names(myData@data)[4:ncol(myData@data)]
-    myData@data[, (cols) := clitter_coarse@data[, ..cols] + clitter_fine@data[, ..cols]]
+    myData@data[, (cols) := clitter_coarse@data[, cols, with = FALSE] + clitter_fine@data[, cols, with = FALSE]]
     
     #isolate relevant columns:
     myData@data <- myData@data[,c("Lon" ,  "Lat" , "Year","Larix", "Picea", "Pinus", "Fagus", "Quercus", "otherBL", "otherNL","NatForest","Forest_sum")]
     
     
     # Unit conversion: from C to volume using mean wood density
+    # from m2 to ha
     species <- c("Larix", "Picea", "Pinus", "Fagus", "Quercus", "otherBL", "otherNL", "NatForest","Forest_sum")
     for (sp in species) {
       wd <- mean_wooddensity_df[mean_wooddensity_df$Luforest == sp, "MeanWoodDensity"]
-      myData@data[[sp]] <- myData@data[[sp]] * wd
+      myData@data[[sp]] <- myData@data[[sp]] / wd * 10000
     }
     
     #reorganise into ForestPaths format:
