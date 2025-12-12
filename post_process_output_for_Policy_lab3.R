@@ -315,7 +315,7 @@ main <- function() {
     )
   )
   
-  deadwood_data_m3ha <- convert_units(deadwood_data, 1/(0.5 * mean_wood_density) * 10000 )
+  deadwood_data_m3ha <- convert_units(deadwood_data, 1/(0.5 * mean_wood_density) * 10000 ) # note: 0.5 assumption is wrong here!!!
   ### conversion to m3/ha
   create_country_plots(
     deadwood_data_m3ha,
@@ -765,3 +765,486 @@ main <- function() {
 if (interactive() || !exists("testing_mode")) {
   main()
 }
+
+
+#============================================================================================================
+#difference maps:
+library(ggplot2)
+library(rnaturalearth)
+library(rnaturalearthdata)
+
+# Get world map (simplified polygons)
+world <- ne_countries(scale = "medium", returnclass = "sf")
+
+
+
+
+#############SSP370
+#Baseline scenario for 370
+scenario ="ssp370"
+#retrieve the source file location + add some metadata:
+source.in = defineSource(id= paste0("base_",scenario),
+                         paste0(base_dir,"base_fut_MPI-ESM1-2-HR_",scenario,"_diston"),
+                         format = GUESS,
+                         name = paste0("base_",scenario))
+
+myData <- getField(source = source.in, quant = "diamstruct_cmass_wood_inc_forest")
+myData@data$Total <- rowSums(myData@data[, 4:34])
+
+# Keep relevant columns
+myData@data <- myData@data[, .(Lon, Lat, Year, Total)]
+
+# Merge with land cover
+myData@data <- myData@data[
+  landcover_fractions_from_2025,
+  on = .(Lon, Lat)
+]
+myData@data <- myData@data[landcover_fractions_from_2025, on = .(Lon, Lat)]  
+myData@data$GridcellArea_m2 <- GridcellArea_m2(myData@data$Lat,res=0.5)
+myData@data$Forest_area <- myData@data$GridcellArea_m2 * myData@data$FOREST
+
+
+myData_base <- myData
+
+
+
+for(management in managementslist[-1]){
+  
+    source.in = defineSource(id= paste0(management,"_",scenario),
+                             dir= paste0(base_dir,management,"_fut_MPI-ESM1-2-HR_ssp370_diston"),
+                             format = GUESS,
+                             name = paste0(management,"_",scenario))
+    
+    myData <- getField(source = source.in, quant = "diamstruct_cmass_wood_inc_forest")
+    myData@data$Total  <-  rowSums(myData@data[,4:dim(myData@data)[2]])#/10000 #unitconversion m2 to ha
+    myData@data <- myData@data[landcover_fractions_from_2025, on = .(Lon, Lat)]  
+    myData@data$GridcellArea_m2 <- GridcellArea_m2(myData@data$Lat,res=0.5)
+    myData@data$Forest_area <- myData@data$GridcellArea_m2 * myData@data$FOREST
+    
+    
+    #extract years first:
+    myData2050 <- myData
+    myData2050@data <- myData@data[which(myData@data$Year > 2040 & myData@data$Year <= 2050),]
+    
+    myData_base_2050 <- myData_base
+    myData_base_2050@data <- myData_base_2050@data[which(myData_base_2050@data$Year > 2040 & myData_base_2050@data$Year  <= 2050),]
+    
+    
+    # identify the columns with size classes (all except Lon, Lat, Year)
+    size_cols <- setdiff(names(myData_base_2050@data), c("Lon", "Lat", "Year"))
+    size_cols <- c("Year","Total","Forest_area")
+   
+    # compute mean across years for each Lon, Lat
+    myData_base_2050@data <- myData_base_2050@data[, lapply(.SD, function(x) weighted.mean(x, w = Forest_area, na.rm = TRUE)), 
+                                                   by = .(Lon, Lat), 
+                                                   .SDcols = size_cols]
+    # compute mean across years for each Lon, Lat
+    myData2050@data <- myData2050@data[, lapply(.SD, function(x) weighted.mean(x, w = Forest_area, na.rm = TRUE)), 
+                                       by = .(Lon, Lat), 
+                                       .SDcols = size_cols]
+    
+    myData_base_2050@data$Total_diff <-   myData2050@data$Total -  myData_base_2050@data$Total 
+    
+    #unitconversion:
+    #myData_base_2050@data$Total_diff <- myData_base_2050@data$Total_diff*0.001*10000 # ton/ha
+    
+    # Define Europe extent (rough bounding box)
+    xlim <- c(-11, 35)   # longitude range
+    ylim <- c(34, 72)    # latitude range
+    
+    if(management=="lightthin"){
+      limits = c(-0.025,0.03)
+    }else 
+    if(management=="intensthin"){
+      limits = c(-0.05,0.04)
+    }else 
+    if(management=="rettree"){
+      limits = c(-0.04,0.04)
+    }else 
+    if(management=="sfire"){
+      limits = c(-0.03,0.03)
+    }else if(management=="ccf"){
+      limits = c(-0.04,0.05)
+    }else(
+      limits = range(myData_base_2050@data$Total_diff)
+    )
+    
+    # Get world map (simplified polygons)
+    world <- ne_countries(scale = "medium", returnclass = "sf")
+    
+    png(filename=paste0("../Figures_and_reports/Policy_Lab_maps/",scenario,"_2050_GAI_map_",management,"-baseline.png"),
+        width = 120, height = 90, units = "mm", res = 630)  # bigger canvas
+    
+    # Plot using ggplot2
+    print(
+      ggplot() + 
+      
+      # Background: world polygons (grey land, lightblue sea background)
+      geom_sf(data = world, fill = "grey90", color = "grey40") +
+      
+      geom_tile(data= myData_base_2050@data, aes(x = Lon, y = Lat, fill = Total_diff)) +
+      
+      scale_fill_gradient2(
+        low = "blue",    # negative values
+        mid = "white",   # zero
+        high = "red",    # positive values
+        midpoint = 0,    # center of scale
+        limits = limits,
+        name = expression(Delta ~ "kgC/m2")
+      ) +
+      coord_sf(xlim=xlim,ylim=ylim,expand=FALSE) +
+      labs(
+        x = "Longitude",
+        y = "Latitude",
+        # title = paste("Difference in cumulative carbon uptake between\n", management , " and base over 25 years")
+        title = paste( management ,"- base in 2050")#"- base"
+      ) +
+      theme_minimal()
+    )
+    
+    dev.off()
+}
+
+
+for(management in managementslist[-1]){
+  
+  ###spatial analysis 1:
+  source.in = defineSource(id= paste0(management,"_",scenario),
+                           dir= paste0(base_dir,management,"_fut_MPI-ESM1-2-HR_ssp370_diston"),
+                           format = GUESS,
+                           name = paste0(management,"_",scenario))
+  
+  myData <- getField(source = source.in, quant = "diamstruct_cmass_wood_inc_forest")
+  myData@data$Total  <-  rowSums(myData@data[,4:dim(myData@data)[2]])#/10000 #unitconversion m2 to ha
+  myData@data <- myData@data[landcover_fractions_from_2025, on = .(Lon, Lat)]  
+  myData@data$GridcellArea_m2 <- GridcellArea_m2(myData@data$Lat,res=0.5)
+  myData@data$Forest_area <- myData@data$GridcellArea_m2 * myData@data$FOREST
+  
+  
+  #extract years first:
+  myData2050 <- myData
+  myData2050@data <- myData@data[which(myData@data$Year > 2090 & myData@data$Year <= 2100),]
+  
+  myData_base_2050 <- myData_base
+  myData_base_2050@data <- myData_base_2050@data[which(myData_base_2050@data$Year > 2090 & myData_base_2050@data$Year  <= 2100),]
+  
+  
+  # identify the columns with size classes (all except Lon, Lat, Year)
+  size_cols <- setdiff(names(myData_base_2050@data), c("Lon", "Lat", "Year"))
+  size_cols <- c("Year","Total","Forest_area")
+  
+  # compute mean across years for each Lon, Lat
+  myData_base_2050@data <- myData_base_2050@data[, lapply(.SD, function(x) weighted.mean(x, w = Forest_area, na.rm = TRUE)), 
+                                                 by = .(Lon, Lat), 
+                                                 .SDcols = size_cols]
+  # compute mean across years for each Lon, Lat
+  myData2050@data <- myData2050@data[, lapply(.SD, function(x) weighted.mean(x, w = Forest_area, na.rm = TRUE)), 
+                                     by = .(Lon, Lat), 
+                                     .SDcols = size_cols]
+  
+  myData_base_2050@data$Total_diff <-   myData2050@data$Total -  myData_base_2050@data$Total 
+  
+  #unitconversion:
+  #myData_base_2050@data$Total_diff <- myData_base_2050@data$Total_diff*0.001*10000 # ton/ha
+  
+  # Define Europe extent (rough bounding box)
+  xlim <- c(-11, 35)   # longitude range
+  ylim <- c(34, 72)    # latitude range
+  if(management=="lightthin"){
+    limits = c(-0.08,0.1)
+  }else
+  if(management=="intensthin"){
+    limits = c(-0.07,0.1)
+  }else
+  if(management=="rettree"){
+    limits = c(-0.12,0.06)
+  }else
+  if(management=="sfire"){
+    limits = c(-0.05,0.06)
+  }else(
+    limits = range(myData_base_2050@data$Total_diff)
+  )
+  
+  # Get world map (simplified polygons)
+  world <- ne_countries(scale = "medium", returnclass = "sf")
+  
+  
+  png(filename=paste0("../Figures_and_reports/Policy_Lab_maps/",scenario,"_2100_GAI_map_",management,"-baseline.png"),
+      width = 120, height = 90, units = "mm", res = 630)  # bigger canvas
+  
+  # Plot using ggplot2
+  print(
+    ggplot() + 
+    
+    # Background: world polygons (grey land, lightblue sea background)
+    geom_sf(data = world, fill = "grey90", color = "grey40") +
+    
+    geom_tile(data= myData_base_2050@data, aes(x = Lon, y = Lat, fill = Total_diff)) +
+    
+    scale_fill_gradient2(
+      low = "blue",    # negative values
+      mid = "white",   # zero
+      high = "red",    # positive values
+      midpoint = 0,    # center of scale
+      limits=limits,
+      name = expression(Delta ~ "kgC/m2")
+    ) +
+    coord_sf(xlim=xlim,ylim=ylim,expand=FALSE) +
+    labs(
+      x = "Longitude",
+      y = "Latitude",
+      # title = paste("Difference in cumulative carbon uptake between\n", management , " and base over 25 years")
+      title = paste( management ,"- base in 2100")#"- base"
+    ) +
+    theme_minimal()
+  )
+  
+  dev.off()
+}
+
+
+
+
+
+
+
+#############SSP126
+#Baseline scenario for 370
+scenario ="ssp126"
+#retrieve the source file location + add some metadata:
+source.in = defineSource(id= paste0("base_",scenario),
+                         paste0(base_dir,"base_fut_MPI-ESM1-2-HR_",scenario,"_diston"),
+                         format = GUESS,
+                         name = paste0("base_",scenario))
+
+myData <- getField(source = source.in, quant = "diamstruct_cmass_wood_inc_forest")
+myData@data$Total <- rowSums(myData@data[, 4:34])
+
+# Keep relevant columns
+myData@data <- myData@data[, .(Lon, Lat, Year, Total)]
+
+# Merge with land cover
+myData@data <- myData@data[
+  landcover_fractions_from_2025,
+  on = .(Lon, Lat)
+]
+myData@data <- myData@data[landcover_fractions_from_2025, on = .(Lon, Lat)]  
+myData@data$GridcellArea_m2 <- GridcellArea_m2(myData@data$Lat,res=0.5)
+myData@data$Forest_area <- myData@data$GridcellArea_m2 * myData@data$FOREST
+
+
+myData_base <- myData
+
+
+
+for(management in managementslist[-1]){
+  
+  source.in = defineSource(id= paste0(management,"_",scenario),
+                           dir= paste0(base_dir,management,"_fut_MPI-ESM1-2-HR_ssp126_diston"),
+                           format = GUESS,
+                           name = paste0(management,"_",scenario))
+  
+  myData <- getField(source = source.in, quant = "diamstruct_cmass_wood_inc_forest")
+  myData@data$Total  <-  rowSums(myData@data[,4:dim(myData@data)[2]])#/10000 #unitconversion m2 to ha
+  myData@data <- myData@data[landcover_fractions_from_2025, on = .(Lon, Lat)]  
+  myData@data$GridcellArea_m2 <- GridcellArea_m2(myData@data$Lat,res=0.5)
+  myData@data$Forest_area <- myData@data$GridcellArea_m2 * myData@data$FOREST
+  
+  
+  #extract years first:
+  myData2050 <- myData
+  myData2050@data <- myData@data[which(myData@data$Year > 2040 & myData@data$Year <= 2050),]
+  
+  myData_base_2050 <- myData_base
+  myData_base_2050@data <- myData_base_2050@data[which(myData_base_2050@data$Year > 2040 & myData_base_2050@data$Year  <= 2050),]
+  
+  
+  # identify the columns with size classes (all except Lon, Lat, Year)
+  size_cols <- setdiff(names(myData_base_2050@data), c("Lon", "Lat", "Year"))
+  size_cols <- c("Year","Total","Forest_area")
+  
+  # compute mean across years for each Lon, Lat
+  myData_base_2050@data <- myData_base_2050@data[, lapply(.SD, function(x) weighted.mean(x, w = Forest_area, na.rm = TRUE)), 
+                                                 by = .(Lon, Lat), 
+                                                 .SDcols = size_cols]
+  # compute mean across years for each Lon, Lat
+  myData2050@data <- myData2050@data[, lapply(.SD, function(x) weighted.mean(x, w = Forest_area, na.rm = TRUE)), 
+                                     by = .(Lon, Lat), 
+                                     .SDcols = size_cols]
+  
+  myData_base_2050@data$Total_diff <-   myData2050@data$Total -  myData_base_2050@data$Total 
+  
+  #unitconversion:
+  #myData_base_2050@data$Total_diff <- myData_base_2050@data$Total_diff*0.001*10000 # ton/ha
+  
+  # Define Europe extent (rough bounding box)
+  xlim <- c(-11, 35)   # longitude range
+  ylim <- c(34, 72)    # latitude range
+  if(management=="longrot"){
+    limits = c(-0.025,0.04)
+  }else 
+    if(management=="intensthin"){
+      limits = c(-0.05,0.04)
+    }else 
+      if(management=="rettree"){
+        limits = c(-0.04,0.08)
+      }else 
+        if(management=="sfire"){
+          limits = c(-0.03,0.04)
+        }else if(management=="ccf"){
+          limits = c(-0.04,0.05)
+        }else(
+          limits = range(myData_base_2050@data$Total_diff)
+        )
+ 
+  
+  
+  # Get world map (simplified polygons)
+  world <- ne_countries(scale = "medium", returnclass = "sf")
+  
+  png(filename=paste0("../Figures_and_reports/Policy_Lab_maps/",scenario,"_2050_GAI_map_",management,"-baseline.png"),
+      width = 120, height = 90, units = "mm", res = 630)  # bigger canvas
+  
+  # Plot using ggplot2
+  print(
+    ggplot() + 
+      
+      # Background: world polygons (grey land, lightblue sea background)
+      geom_sf(data = world, fill = "grey90", color = "grey40") +
+      
+      geom_tile(data= myData_base_2050@data, aes(x = Lon, y = Lat, fill = Total_diff)) +
+      
+      scale_fill_gradient2(
+        low = "blue",    # negative values
+        mid = "white",   # zero
+        high = "red",    # positive values
+        midpoint = 0,    # center of scale
+        limits = limits,
+        name = expression(Delta ~ "kgC/m2")
+      ) +
+      coord_sf(xlim=xlim,ylim=ylim,expand=FALSE) +
+      labs(
+        x = "Longitude",
+        y = "Latitude",
+        # title = paste("Difference in cumulative carbon uptake between\n", management , " and base over 25 years")
+        title = paste( management ,"- base in 2050")#"- base"
+      ) +
+      theme_minimal()
+  )
+  
+  dev.off()
+}
+
+
+
+
+for(management in managementslist[-1]){
+  
+  ###spatial analysis 1:
+  source.in = defineSource(id= paste0(management,"_",scenario),
+                           dir= paste0(base_dir,management,"_fut_MPI-ESM1-2-HR_ssp126_diston"),
+                           format = GUESS,
+                           name = paste0(management,"_",scenario))
+  
+  myData <- getField(source = source.in, quant = "diamstruct_cmass_wood_inc_forest")
+  myData@data$Total  <-  rowSums(myData@data[,4:dim(myData@data)[2]])#/10000 #unitconversion m2 to ha
+  myData@data <- myData@data[landcover_fractions_from_2025, on = .(Lon, Lat)]  
+  myData@data$GridcellArea_m2 <- GridcellArea_m2(myData@data$Lat,res=0.5)
+  myData@data$Forest_area <- myData@data$GridcellArea_m2 * myData@data$FOREST
+  
+  
+  #extract years first:
+  myData2050 <- myData
+  myData2050@data <- myData@data[which(myData@data$Year > 2090 & myData@data$Year <= 2100),]
+  
+  myData_base_2050 <- myData_base
+  myData_base_2050@data <- myData_base_2050@data[which(myData_base_2050@data$Year > 2090 & myData_base_2050@data$Year  <= 2100),]
+  
+  
+  # identify the columns with size classes (all except Lon, Lat, Year)
+  size_cols <- setdiff(names(myData_base_2050@data), c("Lon", "Lat", "Year"))
+  size_cols <- c("Year","Total","Forest_area")
+  
+  # compute mean across years for each Lon, Lat
+  myData_base_2050@data <- myData_base_2050@data[, lapply(.SD, function(x) weighted.mean(x, w = Forest_area, na.rm = TRUE)), 
+                                                 by = .(Lon, Lat), 
+                                                 .SDcols = size_cols]
+  # compute mean across years for each Lon, Lat
+  myData2050@data <- myData2050@data[, lapply(.SD, function(x) weighted.mean(x, w = Forest_area, na.rm = TRUE)), 
+                                     by = .(Lon, Lat), 
+                                     .SDcols = size_cols]
+  
+  myData_base_2050@data$Total_diff <-   myData2050@data$Total -  myData_base_2050@data$Total 
+  
+  #unitconversion:
+  #myData_base_2050@data$Total_diff <- myData_base_2050@data$Total_diff*0.001*10000 # ton/ha
+  
+  # Define Europe extent (rough bounding box)
+  xlim <- c(-11, 35)   # longitude range
+  ylim <- c(34, 72)    # latitude range
+  
+  if(management=="ccf"){
+    limits = c(-0.18,0.1)
+  }else
+  if(management=="intensthin"){
+    limits = c(-0.07,0.05)
+  }else
+    if(management=="lightthin"){
+      limits = c(-0.09,0.05)
+    }else
+      if(management=="longrot"){
+        limits = c(-0.055,0.09)
+      }else
+  if(management=="rettree"){
+    limits = c(-0.10,0.05)
+  }else
+  if(management=="sfire"){
+    limits = c(-0.05,0.055)
+  }else(
+    limits = range(myData_base_2050@data$Total_diff)
+  )
+  # Get world map (simplified polygons)
+  world <- ne_countries(scale = "medium", returnclass = "sf")
+  
+  
+  png(filename=paste0("../Figures_and_reports/Policy_Lab_maps/",scenario,"_2100_GAI_map_",management,"-baseline.png"),
+      width = 120, height = 90, units = "mm", res = 630)  # bigger canvas
+  
+  # Plot using ggplot2
+  print(
+    ggplot() + 
+      
+      # Background: world polygons (grey land, lightblue sea background)
+      geom_sf(data = world, fill = "grey90", color = "grey40") +
+      
+      geom_tile(data= myData_base_2050@data, aes(x = Lon, y = Lat, fill = Total_diff)) +
+      
+      scale_fill_gradient2(
+        low = "blue",    # negative values
+        mid = "white",   # zero
+        high = "red",    # positive values
+        midpoint = 0,    # center of scale
+        limits=limits,
+        name = expression(Delta ~ "kgC/m2")
+      ) +
+      coord_sf(xlim=xlim,ylim=ylim,expand=FALSE) +
+      labs(
+        x = "Longitude",
+        y = "Latitude",
+        # title = paste("Difference in cumulative carbon uptake between\n", management , " and base over 25 years")
+        title = paste( management ,"- base in 2100")#"- base"
+      ) +
+      theme_minimal()
+  )
+  
+  dev.off()
+}
+
+
+
+#============================================================================================================
+
+
+
+
+
